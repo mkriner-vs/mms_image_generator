@@ -33,10 +33,16 @@ overlay_x = st.sidebar.number_input("Overlay X Position", value=1301, help="Hori
 overlay_y = st.sidebar.number_input("Overlay Y Position", value=735, help="Vertical position of the overlay")
 overlay_max_w = st.sidebar.number_input("Overlay Max Width", value=395, help="Maximum width the overlay can be")
 overlay_max_h = st.sidebar.number_input("Overlay Max Height", value=650, help="Maximum height the overlay can be")
+overlay_auto_trim = st.sidebar.checkbox("Auto-trim transparent padding on overlay", value=True,
+                                         help="Crops each overlay to its visible content before fitting it into the box above. Fixes overlays looking smaller than others when the source image has extra transparent margin (common with state shape PNGs).")
 
 st.sidebar.header("Text Configuration")
-font_size = st.sidebar.slider("Font Size", 10, 200, 130)
-text_x = st.sidebar.number_input("Text X Position", value=391, help="Horizontal position of the text")
+font_size = st.sidebar.slider("Font Size", 10, 300, 215)
+auto_center_text = st.sidebar.checkbox("Auto-center text horizontally", value=True,
+                                        help="Recentres the text based on its actual rendered width, so it stays centered no matter how long the text is (e.g. 'Alabama' vs 'California').")
+text_center_x = st.sidebar.number_input("Text Center X (used when auto-center is on)", value=1590,
+                                         help="The horizontal point the text should be centered around.")
+text_x = st.sidebar.number_input("Text X Position (used when auto-center is off)", value=391, help="Horizontal position of the text")
 text_y = st.sidebar.number_input("Text Y Position", value=542, help="Vertical position of the text")
 text_spacing = st.sidebar.slider("Line Spacing", 0, 50, 6)
 text_align = st.sidebar.selectbox("Text Alignment", ["left", "center", "right"], index=1)
