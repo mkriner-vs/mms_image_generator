@@ -51,10 +51,50 @@ text_align = st.sidebar.selectbox("Text Alignment", ["left", "center", "right"],
 text_color = st.sidebar.color_picker("Text Color", "#000000")
 text_color_rgb = tuple(int(text_color.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
 
-def fit_into(img, max_w, max_h):
+
+def trim_transparent(img):
+    """Crop image to the bounding box of its non-transparent content."""
+    if img.mode != "RGBA":
+        return img
+    alpha = img.split()[-1]
+    bbox = alpha.getbbox()
+    return img.crop(bbox) if bbox else img
+
+
+def fit_into(img, max_w, max_h, trim=None):
+    """Scale img to fit within (max_w, max_h), optionally trimming transparent
+    padding first so differently-padded source images render at a consistent size."""
+    if trim is None:
+        trim = overlay_auto_trim
+    if trim:
+        img = trim_transparent(img)
     w, h = img.size
     scale = min(max_w / w, max_h / h)
     return img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
+
+
+def paste_centered(canvas, overlay_resized, box_x, box_y, box_w, box_h):
+    """Alpha-composite overlay_resized centered within the given box."""
+    ow, oh = overlay_resized.size
+    paste_x = box_x + (box_w - ow) // 2
+    paste_y = box_y + (box_h - oh) // 2
+    canvas.alpha_composite(overlay_resized, (paste_x, paste_y))
+
+
+def draw_text(draw, custom_text, font):
+    """Draw custom_text, auto-centering horizontally around text_center_x when enabled."""
+    if not custom_text:
+        return
+    if auto_center_text:
+        bbox = draw.multiline_textbbox((0, 0), custom_text, font=font,
+                                        spacing=text_spacing, align=text_align)
+        text_w = bbox[2] - bbox[0]
+        draw_x = text_center_x - text_w / 2 - bbox[0]
+    else:
+        draw_x = text_x
+    draw.multiline_text((draw_x, text_y), custom_text, font=font,
+                         fill=text_color_rgb, spacing=text_spacing, align=text_align)
+
 
 def make_color_transparent(img, target_color, threshold=50):
     """Make a specific color transparent in an image"""
@@ -79,15 +119,14 @@ def generate_image(template, overlay, custom_text, font):
     canvas = template.copy()
     draw = ImageDraw.Draw(canvas)
     
-    # Paste overlay
+    # Paste overlay, centered within the configured box so trimmed shapes of
+    # different sizes/aspect ratios all sit in the same visual spot
     if overlay:
         overlay_resized = fit_into(overlay, overlay_max_w, overlay_max_h)
-        canvas.alpha_composite(overlay_resized, (overlay_x, overlay_y))
+        paste_centered(canvas, overlay_resized, overlay_x, overlay_y, overlay_max_w, overlay_max_h)
     
     # Draw text
-    if custom_text:
-        draw.multiline_text((text_x, text_y), custom_text, font=font, 
-                          fill=text_color_rgb, spacing=text_spacing, align=text_align)
+    draw_text(draw, custom_text, font)
     
     return canvas
 
@@ -353,12 +392,14 @@ if template_file and font_file:
                                     # Apply special scaling for Alaska (it's geographically huge)
                                     if selected_state == 'AK':
                                         # Alaska gets 6x the normal max dimensions
-                                        county_map_resized = fit_into(county_map_img, overlay_max_w * 6, overlay_max_h * 6)
+                                        box_w, box_h = overlay_max_w * 6, overlay_max_h * 6
                                     else:
-                                        county_map_resized = fit_into(county_map_img, overlay_max_w, overlay_max_h)
+                                        box_w, box_h = overlay_max_w, overlay_max_h
                                     
-                                    # Paste county map overlay
-                                    canvas.alpha_composite(county_map_resized, (overlay_x, overlay_y))
+                                    county_map_resized = fit_into(county_map_img, box_w, box_h)
+                                    
+                                    # Paste county map overlay, centered within its box
+                                    paste_centered(canvas, county_map_resized, overlay_x, overlay_y, box_w, box_h)
                                     
                                     # Determine subdivision type based on state
                                     if selected_state == 'AK':
@@ -370,8 +411,7 @@ if template_file and font_file:
                                     
                                     # Draw text
                                     text = f"{county_name} {subdivision}\nresidents needed!"
-                                    draw.multiline_text((text_x, text_y), text, font=font, 
-                                                      fill=text_color_rgb, spacing=text_spacing, align=text_align)
+                                    draw_text(draw, text, font)
                                     
                                     # Save the complete image
                                     final_buf = io.BytesIO()
@@ -624,7 +664,8 @@ else:
     ### Tips:
     - Use the configuration sliders to position text and overlays
     - Text supports multiple lines (use line breaks in the text area)
-    - Overlay images are automatically resized to fit within max dimensions
+    - Overlay images are automatically resized to fit within max dimensions, with transparent padding auto-trimmed for consistent sizing
+    - Text auto-centers based on its actual width so different-length labels line up the same way
     - In batch mode, overlay reference is optional
     - County maps are generated with transparent backgrounds for easy compositing
     """)
