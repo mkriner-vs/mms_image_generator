@@ -29,20 +29,20 @@ overlay_files = st.sidebar.file_uploader("Upload Overlay Images", type=['png', '
 
 # Configuration inputs
 st.sidebar.header("Overlay Configuration")
-overlay_x = st.sidebar.number_input("Overlay X Position", value=400, help="Horizontal position of the overlay")
-overlay_y = st.sidebar.number_input("Overlay Y Position", value=1060, help="Vertical position of the overlay")
-overlay_max_w = st.sidebar.number_input("Overlay Max Width", value=225, help="Maximum width the overlay can be")
-overlay_max_h = st.sidebar.number_input("Overlay Max Height", value=175, help="Maximum height the overlay can be")
+overlay_x = st.sidebar.number_input("Overlay X Position", value=1301, help="Horizontal position of the overlay")
+overlay_y = st.sidebar.number_input("Overlay Y Position", value=735, help="Vertical position of the overlay")
+overlay_max_w = st.sidebar.number_input("Overlay Max Width", value=395, help="Maximum width the overlay can be")
+overlay_max_h = st.sidebar.number_input("Overlay Max Height", value=650, help="Maximum height the overlay can be")
 
 st.sidebar.header("Text Configuration")
-font_size = st.sidebar.slider("Font Size", 10, 200, 54)
-text_x = st.sidebar.number_input("Text X Position", value=650, help="Horizontal position of the text")
-text_y = st.sidebar.number_input("Text Y Position", value=1075, help="Vertical position of the text")
+font_size = st.sidebar.slider("Font Size", 10, 200, 130)
+text_x = st.sidebar.number_input("Text X Position", value=391, help="Horizontal position of the text")
+text_y = st.sidebar.number_input("Text Y Position", value=542, help="Vertical position of the text")
 text_spacing = st.sidebar.slider("Line Spacing", 0, 50, 6)
 text_align = st.sidebar.selectbox("Text Alignment", ["left", "center", "right"], index=1)
 
 # Color picker
-text_color = st.sidebar.color_picker("Text Color", "#2B4396")
+text_color = st.sidebar.color_picker("Text Color", "#000000")
 text_color_rgb = tuple(int(text_color.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
 
 def fit_into(img, max_w, max_h):
