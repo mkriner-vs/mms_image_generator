@@ -57,7 +57,7 @@ text_spacing = st.sidebar.slider("Line Spacing", 0, 50, 6)
 text_align = st.sidebar.selectbox("Text Alignment", ["left", "center", "right"], index=1)
 auto_shrink_text = st.sidebar.checkbox("Auto-shrink font to fit width", value=True,
                                         help="If a line of text (e.g. a long county name) would render wider than the max width below, the font size is automatically reduced until it fits.")
-text_max_width = st.sidebar.number_input("Text Max Width (px)", value=1900,
+text_max_width = st.sidebar.number_input("Text Max Width (px)", value=2870,
                                           help="Maximum allowed rendered text width before auto-shrink kicks in. Set text_max_width to roughly the width of the template minus 100-150px.")
 text_min_font_size = st.sidebar.number_input("Minimum Font Size (auto-shrink floor)", value=80,
                                               help="Font will never shrink below this size, even if the text still doesn't fully fit.")
