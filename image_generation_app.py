@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Created on Mon Dec 15 14:17:17 2025
 
@@ -26,6 +24,11 @@ st.write("Generate custom images by combining a template with overlays and text.
 # File uploaders
 st.sidebar.header("Upload Files")
 template_file = st.sidebar.file_uploader("Upload Template Image", type=['png', 'jpg', 'jpeg'])
+if template_file:
+    _template_preview = Image.open(template_file)
+    st.sidebar.caption(f"📐 Template size: {_template_preview.width} × {_template_preview.height} px",
+                        help="Set text_max_width to roughly the width of the template minus 100-150px.")
+    template_file.seek(0)  # reset so it can be read again later
 font_file = st.sidebar.file_uploader("Upload Font File (.ttf)", type=['ttf'])
 overlay_files = st.sidebar.file_uploader("Upload Overlay Images", type=['png', 'jpg', 'jpeg'], accept_multiple_files=True)
 
@@ -52,6 +55,12 @@ text_x = st.sidebar.number_input("Text X Position (used when auto-center is off)
 text_y = st.sidebar.number_input("Text Y Position", value=542, help="Vertical position of the text")
 text_spacing = st.sidebar.slider("Line Spacing", 0, 50, 6)
 text_align = st.sidebar.selectbox("Text Alignment", ["left", "center", "right"], index=1)
+auto_shrink_text = st.sidebar.checkbox("Auto-shrink font to fit width", value=True,
+                                        help="If a line of text (e.g. a long county name) would render wider than the max width below, the font size is automatically reduced until it fits.")
+text_max_width = st.sidebar.number_input("Text Max Width (px)", value=1900,
+                                          help="Maximum allowed rendered text width before auto-shrink kicks in. Set text_max_width to roughly the width of the template minus 100-150px.")
+text_min_font_size = st.sidebar.number_input("Minimum Font Size (auto-shrink floor)", value=80,
+                                              help="Font will never shrink below this size, even if the text still doesn't fully fit.")
 
 # Color picker
 text_color = st.sidebar.color_picker("Text Color", "#000000")
@@ -96,7 +105,8 @@ def compute_safe_overlay_box(draw, custom_text, font, fallback_y, box_h, bottom_
       shapes never grow into text/graphics baked into the template below them
     """
     if custom_text:
-        bbox = draw.multiline_textbbox((0, text_y), custom_text, font=font,
+        render_font = get_render_font(draw, custom_text)
+        bbox = draw.multiline_textbbox((0, text_y), custom_text, font=render_font,
                                         spacing=text_spacing, align=text_align)
         text_bottom = bbox[3]
     else:
@@ -111,18 +121,46 @@ def compute_safe_overlay_box(draw, custom_text, font, fallback_y, box_h, bottom_
     return box_top, box_h
 
 
+def get_font(size):
+    """Create a font instance at the given size from the uploaded font bytes."""
+    return ImageFont.truetype(io.BytesIO(font_bytes), size)
+
+
+def get_render_font(draw, text):
+    """Return a font sized for `text`, auto-shrinking from font_size down to
+    text_min_font_size (in steps of 5) until the rendered width fits within
+    text_max_width. Falls back to the base font unchanged if auto-shrink is
+    off or the text already fits."""
+    if not text or not auto_shrink_text:
+        return font
+    size = font_size
+    candidate = font
+    bbox = draw.multiline_textbbox((0, 0), text, font=candidate,
+                                    spacing=text_spacing, align=text_align)
+    width = bbox[2] - bbox[0]
+    while width > text_max_width and size > text_min_font_size:
+        size -= 5
+        candidate = get_font(size)
+        bbox = draw.multiline_textbbox((0, 0), text, font=candidate,
+                                        spacing=text_spacing, align=text_align)
+        width = bbox[2] - bbox[0]
+    return candidate
+
+
 def draw_text(draw, custom_text, font):
-    """Draw custom_text, auto-centering horizontally around text_center_x when enabled."""
+    """Draw custom_text, auto-centering horizontally around text_center_x when
+    enabled, and auto-shrinking the font so long lines never overflow the canvas."""
     if not custom_text:
         return
+    render_font = get_render_font(draw, custom_text)
     if auto_center_text:
-        bbox = draw.multiline_textbbox((0, 0), custom_text, font=font,
+        bbox = draw.multiline_textbbox((0, 0), custom_text, font=render_font,
                                         spacing=text_spacing, align=text_align)
         text_w = bbox[2] - bbox[0]
         draw_x = text_center_x - text_w / 2 - bbox[0]
     else:
         draw_x = text_x
-    draw.multiline_text((draw_x, text_y), custom_text, font=font,
+    draw.multiline_text((draw_x, text_y), custom_text, font=render_font,
                          fill=text_color_rgb, spacing=text_spacing, align=text_align)
 
 
@@ -165,8 +203,9 @@ if template_file and font_file:
     # Load template
     template = Image.open(template_file).convert("RGBA")
     
-    # Load font
-    font = ImageFont.truetype(font_file, font_size)
+    # Load font (keep raw bytes so we can rebuild it at different sizes for auto-shrink)
+    font_bytes = font_file.getvalue()
+    font = ImageFont.truetype(io.BytesIO(font_bytes), font_size)
     
     # Load overlay images
     overlays_dict = {}
