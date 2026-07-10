@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 Created on Mon Dec 15 14:17:17 2025
 
@@ -35,6 +37,10 @@ overlay_max_w = st.sidebar.number_input("Overlay Max Width", value=395, help="Ma
 overlay_max_h = st.sidebar.number_input("Overlay Max Height", value=650, help="Maximum height the overlay can be")
 overlay_auto_trim = st.sidebar.checkbox("Auto-trim transparent padding on overlay", value=True,
                                          help="Crops each overlay to its visible content before fitting it into the box above. Fixes overlays looking smaller than others when the source image has extra transparent margin (common with state shape PNGs).")
+overlay_bottom_limit = st.sidebar.number_input(
+    "Overlay Bottom Limit Y", value=1420,
+    help="The overlay will never extend below this vertical point. Set it to where any text/graphics baked into your template (e.g. 'Share your perspective today!') begins, so tall overlays never grow into it."
+)
 
 st.sidebar.header("Text Configuration")
 font_size = st.sidebar.slider("Font Size", 10, 300, 215)
@@ -79,6 +85,30 @@ def paste_centered(canvas, overlay_resized, box_x, box_y, box_w, box_h):
     paste_x = box_x + (box_w - ow) // 2
     paste_y = box_y + (box_h - oh) // 2
     canvas.alpha_composite(overlay_resized, (paste_x, paste_y))
+
+
+def compute_safe_overlay_box(draw, custom_text, font, fallback_y, box_h, bottom_limit=None, padding=20):
+    """
+    Returns (box_top, box_h) for the overlay, guaranteeing:
+    - the overlay starts below the bottom of custom_text (top limit), so tall
+      shapes never overlap text drawn above them
+    - the overlay ends above bottom_limit, if provided (bottom limit), so tall
+      shapes never grow into text/graphics baked into the template below them
+    """
+    if custom_text:
+        bbox = draw.multiline_textbbox((0, text_y), custom_text, font=font,
+                                        spacing=text_spacing, align=text_align)
+        text_bottom = bbox[3]
+    else:
+        text_bottom = text_y
+
+    box_top = max(fallback_y, text_bottom + padding)
+
+    if bottom_limit is not None:
+        available_h = bottom_limit - box_top - padding
+        box_h = min(box_h, max(available_h, 0))
+
+    return box_top, box_h
 
 
 def draw_text(draw, custom_text, font):
@@ -384,18 +414,6 @@ if template_file and font_file:
                                     canvas = template.copy()
                                     draw = ImageDraw.Draw(canvas)
                                     
-                                    # Apply special scaling for Alaska (it's geographically huge)
-                                    if selected_state == 'AK':
-                                        # Alaska gets 6x the normal max dimensions
-                                        box_w, box_h = overlay_max_w * 6, overlay_max_h * 6
-                                    else:
-                                        box_w, box_h = overlay_max_w, overlay_max_h
-                                    
-                                    county_map_resized = fit_into(county_map_img, box_w, box_h)
-                                    
-                                    # Paste county map overlay, centered within its box
-                                    paste_centered(canvas, county_map_resized, overlay_x, overlay_y, box_w, box_h)
-                                    
                                     # Determine subdivision type based on state
                                     if selected_state == 'AK':
                                         subdivision = 'borough'
@@ -404,8 +422,32 @@ if template_file and font_file:
                                     else:
                                         subdivision = 'county'
                                     
-                                    # Draw text
+                                    # Build the text first so we can measure it when
+                                    # computing a safe overlay box (must not overlap
+                                    # the text above, and must not grow into
+                                    # template graphics/text below)
                                     text = f"{county_name} {subdivision} residents needed!"
+                                    
+                                    # Apply special scaling for Alaska (it's geographically huge)
+                                    if selected_state == 'AK':
+                                        # Alaska gets 6x the normal max dimensions
+                                        box_w, box_h = overlay_max_w * 6, overlay_max_h * 6
+                                    else:
+                                        box_w, box_h = overlay_max_w, overlay_max_h
+                                    
+                                    # Constrain the box so tall/thin shapes never
+                                    # overlap the text above or below them
+                                    box_top, box_h = compute_safe_overlay_box(
+                                        draw, text, font, overlay_y, box_h,
+                                        bottom_limit=overlay_bottom_limit, padding=20
+                                    )
+                                    
+                                    county_map_resized = fit_into(county_map_img, box_w, box_h)
+                                    
+                                    # Paste county map overlay, centered within its box
+                                    paste_centered(canvas, county_map_resized, overlay_x, box_top, box_w, box_h)
+                                    
+                                    # Draw text
                                     draw_text(draw, text, font)
                                     
                                     # Save the complete image
@@ -663,4 +705,5 @@ else:
     - Text auto-centers based on its actual width so different-length labels line up the same way
     - In batch mode, overlay reference is optional
     - County maps are generated with transparent backgrounds for easy compositing
+    - The county map overlay is automatically kept between the text above it and the "Overlay Bottom Limit Y" setting, so tall/thin state shapes (like Alabama) won't overlap either
     """)
