@@ -521,7 +521,7 @@ if template_file and font_file:
                                 # Clean filename
                                 safe_county_name = "".join(c if c.isalnum() else "_" for c in county_name)
                                 if use_template:
-                                    filename = f"verasight_survey_{state_name}_{safe_county_name}.png"
+                                    filename = f"template_{state_name}_{safe_county_name}.png"
                                 else:
                                     filename = f"{state_name}_{safe_county_name}.png"
                                 
