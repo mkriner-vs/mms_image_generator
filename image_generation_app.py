@@ -410,7 +410,7 @@ if template_file and font_file:
                                         subdivision = 'county'
                                     
                                     # Draw text
-                                    text = f"{county_name} {subdivision}\nresidents needed!"
+                                    text = f"{county_name} {subdivision} residents needed!"
                                     draw_text(draw, text, font)
                                     
                                     # Save the complete image
