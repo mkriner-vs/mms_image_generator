@@ -126,33 +126,55 @@ def get_font(size):
     return ImageFont.truetype(io.BytesIO(font_bytes), size)
 
 
-def get_render_font(draw, text):
+def get_render_font(draw, text, debug_label=None):
     """Return a font sized for `text`, auto-shrinking from font_size down to
     text_min_font_size (in steps of 5) until the rendered width fits within
     text_max_width. Falls back to the base font unchanged if auto-shrink is
-    off or the text already fits."""
+    off or the text already fits.
+
+    If debug_label is given, records the measured width, threshold, and final
+    font size to st.session_state['shrink_debug'] for later inspection."""
     if not text or not auto_shrink_text:
+        if debug_label is not None:
+            _log_shrink_debug(debug_label, text, font_size, font_size, None)
         return font
     size = font_size
     candidate = font
     bbox = draw.multiline_textbbox((0, 0), text, font=candidate,
                                     spacing=text_spacing, align=text_align)
     width = bbox[2] - bbox[0]
+    original_width = width
     while width > text_max_width and size > text_min_font_size:
         size -= 5
         candidate = get_font(size)
         bbox = draw.multiline_textbbox((0, 0), text, font=candidate,
                                         spacing=text_spacing, align=text_align)
         width = bbox[2] - bbox[0]
+    if debug_label is not None:
+        _log_shrink_debug(debug_label, text, font_size, size, original_width)
     return candidate
 
 
-def draw_text(draw, custom_text, font):
+def _log_shrink_debug(label, text, base_size, final_size, original_width):
+    """Append a row describing whether/how much a given text got shrunk."""
+    if 'shrink_debug' not in st.session_state:
+        st.session_state['shrink_debug'] = []
+    st.session_state['shrink_debug'].append({
+        'label': label,
+        'text': text,
+        'original_width_px': original_width,
+        'base_font_size': base_size,
+        'final_font_size': final_size,
+        'shrunk': final_size < base_size,
+    })
+
+
+def draw_text(draw, custom_text, font, debug_label=None):
     """Draw custom_text, auto-centering horizontally around text_center_x when
     enabled, and auto-shrinking the font so long lines never overflow the canvas."""
     if not custom_text:
         return
-    render_font = get_render_font(draw, custom_text)
+    render_font = get_render_font(draw, custom_text, debug_label=debug_label)
     if auto_center_text:
         bbox = draw.multiline_textbbox((0, 0), custom_text, font=render_font,
                                         spacing=text_spacing, align=text_align)
@@ -405,6 +427,7 @@ if template_file and font_file:
                             
                             # Create a dictionary to store generated images
                             county_images = {}
+                            st.session_state['shrink_debug'] = []  # reset debug log for this batch
                             progress_bar = st.progress(0)
                             
                             total_counties = len(state_counties)
@@ -487,7 +510,7 @@ if template_file and font_file:
                                     paste_centered(canvas, county_map_resized, overlay_x, box_top, box_w, box_h)
                                     
                                     # Draw text
-                                    draw_text(draw, text, font)
+                                    draw_text(draw, text, font, debug_label=county_name)
                                     
                                     # Save the complete image
                                     final_buf = io.BytesIO()
@@ -545,6 +568,26 @@ if template_file and font_file:
                     mime="application/zip",
                     key="download_county_zip"
                 )
+                
+                # Text-sizing debug info: shows exactly which county names got
+                # shrunk, from what width, and to what final font size, so
+                # text_max_width can be tuned precisely instead of guessed.
+                shrink_log = st.session_state.get('shrink_debug', [])
+                if shrink_log:
+                    shrunk_count = sum(1 for r in shrink_log if r['shrunk'])
+                    with st.expander(f"🔍 Text sizing debug ({shrunk_count}/{len(shrink_log)} shrunk)"):
+                        st.caption(
+                            f"Current threshold: text_max_width = {text_max_width}px, "
+                            f"base font size = {font_size}, floor = {text_min_font_size}"
+                        )
+                        for row in shrink_log:
+                            if row['original_width_px'] is None:
+                                continue
+                            status = "🔻 shrunk" if row['shrunk'] else "✅ fits as-is"
+                            st.write(
+                                f"**{row['label']}** — rendered width: {row['original_width_px']:.0f}px "
+                                f"→ {status} (font size {row['base_font_size']} → {row['final_font_size']})"
+                            )
                 
                 # Individual downloads
                 with st.expander("Download Individual County Maps"):
