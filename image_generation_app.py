@@ -29,8 +29,8 @@ overlay_files = st.sidebar.file_uploader("Upload Overlay Images", type=['png', '
 
 # Configuration inputs
 st.sidebar.header("Overlay Configuration")
-overlay_x = st.sidebar.number_input("Overlay X Position", value=1301, help="Horizontal position of the overlay")
-overlay_y = st.sidebar.number_input("Overlay Y Position", value=770, help="Vertical position of the overlay")
+overlay_x = st.sidebar.number_input("Overlay X Position", value=1301, help="Horizontal position of the overlay; + to move right, - to move left")
+overlay_y = st.sidebar.number_input("Overlay Y Position", value=770, help="Vertical position of the overlay; + to move down, - to move up")
 overlay_max_w = st.sidebar.number_input("Overlay Max Width", value=395, help="Maximum width the overlay can be")
 overlay_max_h = st.sidebar.number_input("Overlay Max Height", value=650, help="Maximum height the overlay can be")
 overlay_auto_trim = st.sidebar.checkbox("Auto-trim transparent padding on overlay", value=True,
