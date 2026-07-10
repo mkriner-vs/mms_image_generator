@@ -289,15 +289,10 @@ if template_file and font_file:
             
             # Color settings
             highlight_color = st.color_picker("Highlight Color (selected county)", "#FFA500")
-            base_color = st.color_picker("Base Color (other counties)", "#354eb0")
-            
-            # County outline color toggle
-            outline_style = st.radio(
-                "County Outline Color:",
-                options=["Black", "Blue (#354eb0)"],
-                horizontal=True
-            )
-            outline_color = "black" if outline_style == "Black" else "#354eb0"
+            base_color = st.color_picker("Base Color (other counties)", "#06204a")
+
+            # County outline color
+            outline_color = st.color_picker("County Outline Color", "#06204a")
             
             # Output mode selection
             output_mode = st.radio(
