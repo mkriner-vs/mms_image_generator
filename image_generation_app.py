@@ -624,7 +624,7 @@ if template_file and font_file:
             else:
                 st.info("Configure settings and click 'Generate County Maps' to create maps.")
                 st.markdown("""
-                ### How to get county shapefiles:
+                ### If new shapefiles are needed, how to get county shapefiles:
                 1. Visit the [US Census Bureau TIGER/Line Shapefiles](https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.html)
                 2. Download the county shapefile (e.g., `cb_2020_us_county_20m.zip`)
                 3. Upload the ZIP file here
@@ -648,7 +648,7 @@ if template_file and font_file:
                 return "".join(ch for ch in s.lower() if ch.isalnum())
 
             # Check for a local folder of pre-made per-state images first
-            local_state_images_dir = 'dark_blue_state_images'
+            local_state_images_dir = 'state_images'
             use_local_state_images = os.path.isdir(local_state_images_dir)
 
             state_images_zip = None
@@ -658,7 +658,7 @@ if template_file and font_file:
                 state_images_zip = st.file_uploader(
                     "Upload State Images (ZIP)",
                     type=['zip'],
-                    help="No 'dark_blue_state_images' folder found alongside the app. Upload a ZIP file containing one image per state, named by state name or abbreviation (e.g. 'Alabama.png' or 'AL.png').",
+                    help="No 'state_images' folder found alongside the app. Upload a ZIP file containing one image per state, named by state name or abbreviation (e.g. 'Alabama.png' or 'AL.png').",
                     key="state_images_zip_uploader"
                 )
 
@@ -888,7 +888,7 @@ if template_file and font_file:
                 st.info("Configure settings and click 'Generate All State Maps' to create maps.")
                 st.markdown("""
                 ### How this works:
-                1. Place a folder named `dark_blue_state_images` next to the app, containing
+                1. If you need new maps, place a folder named `state_images` next to the app, containing
                    one image per state (PNG or JPG), named by state name or abbreviation
                    (e.g. `Alabama.png`, `Alaska.png`, ... or `AL.png`, `AK.png`, ...).
                    If that folder isn't found, you can upload a ZIP of the same images instead.
@@ -1069,7 +1069,7 @@ else:
     
     **State Map Generator:**
     1. State images are already included and can change colors. If you need new images, follow steps 2-5.
-    2. Place a folder named `dark_blue_state_images` next to the app with one pre-made image per state (named by state name or abbreviation), or upload a ZIP of the same
+    2. Place a folder named `state_images` next to the app with one pre-made image per state (named by state name or abbreviation), or upload a ZIP of the same
     3. Choose "Maps Only" or "Complete Images (with template & text)"
     4. Click "Generate All State Maps" to process all 50 states + DC in one batch
     5. Download all as ZIP or individually
@@ -1082,6 +1082,6 @@ else:
     - In batch mode, overlay reference is optional
     - County maps are generated with transparent backgrounds for easy compositing
     - The county map overlay is automatically kept between the text above it and the "Overlay Bottom Limit Y" setting, so tall/thin state shapes (like Alabama) won't overlap either
-    - The State Map Generator pulls one pre-made image per state from a local `dark_blue_state_images` folder (or an uploaded ZIP), matching files by state name or abbreviation, and processes all 50 states + DC in one batch
+    - The State Map Generator pulls one pre-made image per state from a local `state_images` folder (or an uploaded ZIP), matching files by state name or abbreviation, and processes all 50 states + DC in one batch
     - In the State Map Generator, "Recolor state images" swaps the shape's color for one you choose while preserving its transparent background and edge smoothing — handy if the source images are all one color (e.g. dark blue) and you want a different one
     """)
