@@ -504,10 +504,15 @@ if template_file and font_file:
                                     
                                     # Apply special scaling for Alaska (it's geographically huge)
                                     if selected_state == 'AK':
-                                        # Alaska gets 6x the normal max dimensions
+                                        # Alaska gets 6x the normal max dimensions. Expand the
+                                        # box outward from the same horizontal center as the
+                                        # normal box, rather than growing it to the right only,
+                                        # so Alaska doesn't shift off-center.
                                         box_w, box_h = overlay_max_w * 6, overlay_max_h * 6
+                                        box_x = overlay_x - (box_w - overlay_max_w) // 2
                                     else:
                                         box_w, box_h = overlay_max_w, overlay_max_h
+                                        box_x = overlay_x
                                     
                                     # Constrain the box so tall/thin shapes never
                                     # overlap the text above or below them
@@ -519,7 +524,7 @@ if template_file and font_file:
                                     county_map_resized = fit_into(county_map_img, box_w, box_h)
                                     
                                     # Paste county map overlay, centered within its box
-                                    paste_centered(canvas, county_map_resized, overlay_x, box_top, box_w, box_h)
+                                    paste_centered(canvas, county_map_resized, box_x, box_top, box_w, box_h)
                                     
                                     # Draw text
                                     draw_text(draw, text, font, debug_label=county_name)
@@ -753,9 +758,15 @@ if template_file and font_file:
 
                                     # Apply special scaling for Alaska (it's geographically huge)
                                     if abbrev == 'AK':
+                                        # Alaska gets 6x the normal max dimensions. Expand the
+                                        # box outward from the same horizontal center as the
+                                        # normal box, rather than growing it to the right only,
+                                        # so Alaska doesn't shift off-center.
                                         box_w, box_h = overlay_max_w * 6, overlay_max_h * 6
+                                        box_x = overlay_x - (box_w - overlay_max_w) // 2
                                     else:
                                         box_w, box_h = overlay_max_w, overlay_max_h
+                                        box_x = overlay_x
 
                                     # Constrain the box so tall/thin shapes never
                                     # overlap the text above or below them
@@ -767,7 +778,7 @@ if template_file and font_file:
                                     state_map_resized = fit_into(state_map_img, box_w, box_h)
 
                                     # Paste state image, centered within its box
-                                    paste_centered(canvas, state_map_resized, overlay_x, box_top, box_w, box_h)
+                                    paste_centered(canvas, state_map_resized, box_x, box_top, box_w, box_h)
 
                                     # Draw text
                                     draw_text(draw, text, font, debug_label=state_full_name)
@@ -1049,17 +1060,19 @@ else:
     4. Download or add to your overlay collection
     
     **County Map Generator:**
-    1. If new county outlines are needed, download county shapefiles from [US Census Bureau](https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.html)
-    2. Upload the ZIP file
-    3. Select your state and customize colors
-    4. Generate individual maps for each county
-    5. Download all as ZIP or individually
+    1. County images are already available. If the images need to change, follow the steps below.
+    2. Download county shapefiles from [US Census Bureau](https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.html)
+    3. Upload the ZIP file
+    4. Select your state and customize colors
+    5. Generate individual maps for each county
+    6. Download all as ZIP or individually
     
     **State Map Generator:**
-    1. Place a folder named `dark_blue_state_images` next to the app with one pre-made image per state (named by state name or abbreviation), or upload a ZIP of the same
-    2. Choose "Maps Only" or "Complete Images (with template & text)"
-    3. Click "Generate All State Maps" to process all 50 states + DC in one batch
-    4. Download all as ZIP or individually
+    1. State images are already included and can change colors. If you need new images, follow steps 2-5.
+    2. Place a folder named `dark_blue_state_images` next to the app with one pre-made image per state (named by state name or abbreviation), or upload a ZIP of the same
+    3. Choose "Maps Only" or "Complete Images (with template & text)"
+    4. Click "Generate All State Maps" to process all 50 states + DC in one batch
+    5. Download all as ZIP or individually
     
     ### Tips:
     - Use the configuration sliders to position text and overlays
