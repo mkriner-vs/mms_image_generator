@@ -2,14 +2,10 @@
 enableStaticServing = true
 
 [[theme.fontFaces]]
-family="dm_serif"
-url="mms_image_generator/static/DMSerifDisplay-Regular.ttf"
-style="normal"
-[[theme.fontFaces]]
 family="inter"
 url="mms_image_generat/static/Inter-VariableFont_wdth,wght.ttf"
 style="normal"
 
 [theme]
 font="inter"
-codeFont="dm_serif"
+codeFont="inter"
