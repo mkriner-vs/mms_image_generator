@@ -233,397 +233,409 @@ def generate_image(template, overlay, custom_text, font):
     return canvas
 
 # Main app logic
-if template_file and font_file:
-    # Load template
+# Load template (optional here: Single Image/Batch tabs require it, but County/State
+# Map Generators can run in "Maps Only" mode without a template or font)
+template = None
+if template_file:
     template = Image.open(template_file).convert("RGBA")
-    
-    # Load font (keep raw bytes so we can rebuild it at different sizes for auto-shrink)
+
+# Load font (keep raw bytes so we can rebuild it at different sizes for auto-shrink)
+font_bytes = None
+font = None
+if font_file:
     font_bytes = font_file.getvalue()
     font = ImageFont.truetype(io.BytesIO(font_bytes), font_size)
-    
-    # Load overlay images
-    overlays_dict = {}
-    if overlay_files:
-        for overlay_file in overlay_files:
-            name = overlay_file.name
-            overlays_dict[name] = Image.open(overlay_file).convert("RGBA")
-    
-    # Add any processed overlays from session state
-    if 'saved_overlays' not in st.session_state:
-        st.session_state['saved_overlays'] = {}
-    
-    overlays_dict.update(st.session_state['saved_overlays'])
-    
+
+# Load overlay images
+overlays_dict = {}
+if overlay_files:
+    for overlay_file in overlay_files:
+        name = overlay_file.name
+        overlays_dict[name] = Image.open(overlay_file).convert("RGBA")
+
+# Add any processed overlays from session state
+if 'saved_overlays' not in st.session_state:
+    st.session_state['saved_overlays'] = {}
+
+overlays_dict.update(st.session_state['saved_overlays'])
+
+if template and font:
     if overlay_files or st.session_state['saved_overlays']:
         total_overlays = len(overlays_dict)
         st.success(f"✅ Loaded template, font, and {total_overlays} overlay images")
     else:
         st.success(f"✅ Loaded template and font")
+else:
+    st.info(
+        "👈 Upload a template image and font file in the sidebar to use the Single Image "
+        "and Batch Generator tabs, and to enable \"Complete Images\" mode in the County/State "
+        "Map Generators. \"Maps Only\" mode works without them."
+    )
+
+# Tab interface
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["Single Image Generator", "Batch Generator", "Background Remover", "County Map Generator", "State Map Generator"])
+
+with tab3:
+    st.header("🖼️ Background Remover")
+    st.write("Remove a specific color from your overlay images to make them transparent.")
     
-    # Tab interface
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Single Image Generator", "Batch Generator", "Background Remover", "County Map Generator", "State Map Generator"])
-    
-    with tab3:
-        st.header("🖼️ Background Remover")
-        st.write("Remove a specific color from your overlay images to make them transparent.")
+    if not overlays_dict:
+        st.info("Upload overlay images in the sidebar first to use the background remover.")
+    else:
+        bg_overlay_choice = st.selectbox("Select image to process:", 
+                                       list(overlays_dict.keys()),
+                                       key="bg_removal_select")
         
-        if not overlays_dict:
-            st.info("Upload overlay images in the sidebar first to use the background remover.")
-        else:
-            bg_overlay_choice = st.selectbox("Select image to process:", 
-                                           list(overlays_dict.keys()),
-                                           key="bg_removal_select")
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.subheader("Settings")
-                
-                # Color picker for background color
-                bg_color = st.color_picker("Select background color to remove", "#FFFFFF",
-                                          help="Pick the color you want to make transparent")
-                bg_color_rgb = tuple(int(bg_color.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
-                
-                # Threshold slider
-                threshold = st.slider("Threshold", 0, 255, 50,
-                                    help="Higher values remove more similar colors. Lower values are more precise.")
-                
-                # Process button
-                if st.button("🎨 Remove Background", type="primary", key="remove_bg_btn"):
-                    original_img = overlays_dict[bg_overlay_choice]
-                    processed_img = make_color_transparent(original_img.copy(), bg_color_rgb, threshold)
-                    st.session_state['processed_overlay'] = processed_img
-                    st.session_state['processed_overlay_name'] = bg_overlay_choice
-            
-            with col2:
-                st.subheader("Preview")
-                
-                # Show before/after
-                if 'processed_overlay' in st.session_state:
-                    # Create a checkerboard background to show transparency
-                    checker_size = 20
-                    w, h = st.session_state['processed_overlay'].size
-                    checker = Image.new('RGB', (w, h), (200, 200, 200))
-                    draw = ImageDraw.Draw(checker)
-                    for y in range(0, h, checker_size):
-                        for x in range(0, w, checker_size):
-                            if (x // checker_size + y // checker_size) % 2:
-                                draw.rectangle([x, y, x + checker_size, y + checker_size], 
-                                             fill=(255, 255, 255))
-                    
-                    # Composite the processed image over checker
-                    checker.paste(st.session_state['processed_overlay'], (0, 0), 
-                                st.session_state['processed_overlay'])
-                    
-                    st.image(checker, caption="Processed (transparent areas show checkered)", 
-                           use_container_width=True)
-                    
-                    # Download button
-                    buf = io.BytesIO()
-                    st.session_state['processed_overlay'].save(buf, format='PNG')
-                    buf.seek(0)
-                    
-                    st.download_button(
-                        label="⬇️ Download Processed Image",
-                        data=buf.getvalue(),
-                        file_name=f"transparent_{st.session_state['processed_overlay_name']}",
-                        mime="image/png",
-                        key="download_processed"
-                    )
-                    
-                    # Option to use in generator
-                    if st.button("✅ Use This in Generator", key="use_processed"):
-                        processed_name = f"processed_{bg_overlay_choice}"
-                        st.session_state['saved_overlays'][processed_name] = st.session_state['processed_overlay']
-                        st.success(f"✅ Added as '{processed_name}' to overlay list! Switch to the generator tabs to use it.")
-                        st.rerun()
-                else:
-                    st.info("Click 'Remove Background' to see the result")
-        
-    with tab4:
-        st.header("🗺️ County Map Generator")
-        st.write("Generate individual county maps for US states with highlighted counties.")
-        
-        # State selection
-        us_states = {
-            'AL': 'Alabama', 'AK': 'Alaska', 'AZ': 'Arizona', 'AR': 'Arkansas',
-            'CA': 'California', 'CO': 'Colorado', 'CT': 'Connecticut', 'DE': 'Delaware',
-            'FL': 'Florida', 'GA': 'Georgia', 'HI': 'Hawaii', 'ID': 'Idaho',
-            'IL': 'Illinois', 'IN': 'Indiana', 'IA': 'Iowa', 'KS': 'Kansas',
-            'KY': 'Kentucky', 'LA': 'Louisiana', 'ME': 'Maine', 'MD': 'Maryland',
-            'MA': 'Massachusetts', 'MI': 'Michigan', 'MN': 'Minnesota', 'MS': 'Mississippi',
-            'MO': 'Missouri', 'MT': 'Montana', 'NE': 'Nebraska', 'NV': 'Nevada',
-            'NH': 'New Hampshire', 'NJ': 'New Jersey', 'NM': 'New Mexico', 'NY': 'New York',
-            'NC': 'North Carolina', 'ND': 'North Dakota', 'OH': 'Ohio', 'OK': 'Oklahoma',
-            'OR': 'Oregon', 'PA': 'Pennsylvania', 'RI': 'Rhode Island', 'SC': 'South Carolina',
-            'SD': 'South Dakota', 'TN': 'Tennessee', 'TX': 'Texas', 'UT': 'Utah',
-            'VT': 'Vermont', 'VA': 'Virginia', 'WA': 'Washington', 'WV': 'West Virginia',
-            'WI': 'Wisconsin', 'WY': 'Wyoming', 'DC': 'Washington DC'
-        }
-        
-        col1, col2 = st.columns([1, 1])
+        col1, col2 = st.columns(2)
         
         with col1:
             st.subheader("Settings")
             
-            # State selection
-            selected_state = st.selectbox(
-                "Select State:",
-                options=list(us_states.keys()),
-                format_func=lambda x: f"{x} - {us_states[x]}"
-            )
+            # Color picker for background color
+            bg_color = st.color_picker("Select background color to remove", "#FFFFFF",
+                                      help="Pick the color you want to make transparent")
+            bg_color_rgb = tuple(int(bg_color.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
             
-            # Check if local file exists
-            local_shapefile_path = 'cb_2020_us_county_20m.zip'
+            # Threshold slider
+            threshold = st.slider("Threshold", 0, 255, 50,
+                                help="Higher values remove more similar colors. Lower values are more precise.")
             
-            use_local_file = os.path.exists(local_shapefile_path)
-            
-            if use_local_file:
-                st.success("✅ Using included shapefile")
-                county_shapefile_source = "local"
-            else:
-                # Upload county shapefile
-                county_shapefile = st.file_uploader(
-                    "Upload County Shapefile (ZIP)",
-                    type=['zip'],
-                    help="Upload a ZIP file containing county shapefiles (e.g., cb_2020_us_county_20m.zip from Census Bureau)"
-                )
-                county_shapefile_source = "upload"
-            
-            # Color settings
-            highlight_color = st.color_picker("Highlight Color (selected county)", "#FFA500")
-            base_color = st.color_picker("Base Color (other counties)", "#06204a")
-
-            # County outline color
-            outline_color = st.color_picker("County Outline Color", "#06204a")
-            
-            # Output mode selection
-            output_mode = st.radio(
-                "Output Mode:",
-                options=["Maps Only", "Complete Images (with template & text)"],
-                key="county_output_mode",
-                help="Maps Only: Just county maps. Complete Images: Combines maps with template and adds '[County] residents needed!' text."
-            )
-            
-            # DPI setting
-            dpi = st.slider("Image Quality (DPI)", 100, 600, 300, step=50)
-            
-            # Show template options if Complete Images is selected
-            use_template = output_mode == "Complete Images (with template & text)"
-            
-            if use_template and not (template_file and font_file):
-                st.warning("⚠️ Please upload a template image and font in the sidebar to use Complete Images mode.")
-            
-            # Generate button
-            can_generate = use_local_file or (county_shapefile_source == "upload" and 'county_shapefile' in locals() and county_shapefile is not None)
-            
-            if use_template:
-                can_generate = can_generate and template_file and font_file
-            
-            if st.button("🗺️ Generate County Maps", type="primary", key="generate_counties", disabled=not can_generate):
-                with st.spinner(f"Generating county maps for {us_states[selected_state]}..."):
-                    try:
-                        # Read the shapefile
-                        if use_local_file:
-                            counties_gdf = gpd.read_file(local_shapefile_path)
-                        else:
-                            counties_gdf = gpd.read_file(county_shapefile)
-                        
-                        # Filter to selected state
-                        state_counties = counties_gdf[counties_gdf['STUSPS'] == selected_state]
-                        
-                        if len(state_counties) == 0:
-                            st.error(f"No counties found for {selected_state}. Please check your shapefile.")
-                        else:
-                            state_name = state_counties.iloc[0]['STATE_NAME']
-                            
-                            # Create a dictionary to store generated images
-                            county_images = {}
-                            st.session_state['shrink_debug'] = []  # reset debug log for this batch
-                            progress_bar = st.progress(0)
-                            
-                            total_counties = len(state_counties)
-                            
-                            for idx, (_, county_row) in enumerate(state_counties.iterrows()):
-                                county_name = county_row['NAME']
-                                county_fips = county_row['GEOID']
-                                
-                                # Create color column
-                                state_counties_copy = state_counties.copy()
-                                state_counties_copy['color'] = state_counties_copy['GEOID'].apply(
-                                    lambda x: highlight_color if x == county_fips else base_color
-                                )
-                                
-                                # Create plot
-                                fig, ax = plt.subplots(figsize=(8, 6))
-                                state_counties_copy.plot(
-                                    ax=ax,
-                                    color=state_counties_copy['color'],
-                                    edgecolor=outline_color,
-                                    linewidth=0.5
-                                )
-                                
-                                # Remove axes
-                                ax.set_axis_off()
-                                
-                                # Save to BytesIO
-                                buf = io.BytesIO()
-                                plt.savefig(
-                                    buf,
-                                    format='PNG',
-                                    dpi=dpi,
-                                    bbox_inches='tight',
-                                    transparent=True,
-                                    facecolor='none'
-                                )
-                                plt.close(fig)
-                                buf.seek(0)
-                                
-                                # If using template mode, combine with template and text
-                                if use_template:
-                                    # Load the county map as an overlay
-                                    county_map_img = Image.open(buf).convert("RGBA")
-                                    
-                                    # Generate the complete image
-                                    canvas = template.copy()
-                                    draw = ImageDraw.Draw(canvas)
-                                    
-                                    # Determine subdivision type based on state
-                                    if selected_state == 'AK':
-                                        subdivision = 'borough'
-                                    elif selected_state == 'LA':
-                                        subdivision = 'parish'
-                                    else:
-                                        subdivision = 'county'
-                                    
-                                    # Build the text first so we can measure it when
-                                    # computing a safe overlay box (must not overlap
-                                    # the text above, and must not grow into
-                                    # template graphics/text below)
-                                    text = f"{county_name} {subdivision} residents needed!"
-                                    
-                                    # Apply special scaling for Alaska (it's geographically huge)
-                                    if selected_state == 'AK':
-                                        # Alaska gets 6x the normal max dimensions. Expand the
-                                        # box outward from the same horizontal center as the
-                                        # normal box, rather than growing it to the right only,
-                                        # so Alaska doesn't shift off-center.
-                                        box_w, box_h = overlay_max_w * 6, overlay_max_h * 6
-                                        box_x = overlay_x - (box_w - overlay_max_w) // 2
-                                    else:
-                                        box_w, box_h = overlay_max_w, overlay_max_h
-                                        box_x = overlay_x
-                                    
-                                    # Constrain the box so tall/thin shapes never
-                                    # overlap the text above or below them
-                                    box_top, box_h = compute_safe_overlay_box(
-                                        draw, text, font, overlay_y, box_h,
-                                        bottom_limit=overlay_bottom_limit, padding=20
-                                    )
-                                    
-                                    county_map_resized = fit_into(county_map_img, box_w, box_h)
-                                    
-                                    # Paste county map overlay, centered within its box
-                                    paste_centered(canvas, county_map_resized, box_x, box_top, box_w, box_h)
-                                    
-                                    # Draw text
-                                    draw_text(draw, text, font, debug_label=county_name)
-                                    
-                                    # Save the complete image
-                                    final_buf = io.BytesIO()
-                                    canvas.save(final_buf, format='PNG')
-                                    final_buf.seek(0)
-                                    buf = final_buf
-                                
-                                # Clean filename
-                                safe_county_name = "".join(c if c.isalnum() else "_" for c in county_name)
-                                if use_template:
-                                    filename = f"template_{state_name}_{safe_county_name}.png"
-                                else:
-                                    filename = f"{state_name}_{safe_county_name}.png"
-                                
-                                county_images[filename] = buf.getvalue()
-                                
-                                # Update progress
-                                progress_bar.progress((idx + 1) / total_counties)
-                            
-                            st.session_state['county_images'] = county_images
-                            st.session_state['county_state_name'] = state_name
-                            st.session_state['county_mode_saved'] = output_mode
-                            st.success(f"✅ Generated {len(county_images)} county {'images' if use_template else 'maps'} for {state_name}!")
-                    
-                    except Exception as e:
-                        st.error(f"Error processing shapefile: {str(e)}")
+            # Process button
+            if st.button("🎨 Remove Background", type="primary", key="remove_bg_btn"):
+                original_img = overlays_dict[bg_overlay_choice]
+                processed_img = make_color_transparent(original_img.copy(), bg_color_rgb, threshold)
+                st.session_state['processed_overlay'] = processed_img
+                st.session_state['processed_overlay_name'] = bg_overlay_choice
         
         with col2:
-            st.subheader("Results")
+            st.subheader("Preview")
             
-            if 'county_images' in st.session_state and st.session_state['county_images']:
-                county_images = st.session_state['county_images']
-                state_name = st.session_state['county_state_name']
-                output_mode = st.session_state.get('county_mode_saved', 'Maps Only')
+            # Show before/after
+            if 'processed_overlay' in st.session_state:
+                # Create a checkerboard background to show transparency
+                checker_size = 20
+                w, h = st.session_state['processed_overlay'].size
+                checker = Image.new('RGB', (w, h), (200, 200, 200))
+                draw = ImageDraw.Draw(checker)
+                for y in range(0, h, checker_size):
+                    for x in range(0, w, checker_size):
+                        if (x // checker_size + y // checker_size) % 2:
+                            draw.rectangle([x, y, x + checker_size, y + checker_size], 
+                                         fill=(255, 255, 255))
                 
-                # Preview first county
-                first_image = list(county_images.values())[0]
-                first_filename = list(county_images.keys())[0]
-                st.image(first_image, caption=f"Preview: {first_filename}", use_container_width=True)
+                # Composite the processed image over checker
+                checker.paste(st.session_state['processed_overlay'], (0, 0), 
+                            st.session_state['processed_overlay'])
                 
-                # Create ZIP file
-                zip_buf = io.BytesIO()
-                with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                    for filename, img_bytes in county_images.items():
-                        zip_file.writestr(filename, img_bytes)
+                st.image(checker, caption="Processed (transparent areas show checkered)", 
+                       use_container_width=True)
                 
-                zip_buf.seek(0)
+                # Download button
+                buf = io.BytesIO()
+                st.session_state['processed_overlay'].save(buf, format='PNG')
+                buf.seek(0)
                 
-                # Download ZIP
-                label_text = f"⬇️ Download All {len(county_images)} County {'Images' if output_mode == 'Complete Images (with template & text)' else 'Maps'} (ZIP)"
                 st.download_button(
-                    label=label_text,
-                    data=zip_buf.getvalue(),
-                    file_name=f"{state_name}_county_{'images' if output_mode == 'Complete Images (with template & text)' else 'maps'}.zip",
-                    mime="application/zip",
-                    key="download_county_zip"
+                    label="⬇️ Download Processed Image",
+                    data=buf.getvalue(),
+                    file_name=f"transparent_{st.session_state['processed_overlay_name']}",
+                    mime="image/png",
+                    key="download_processed"
                 )
                 
-                # Text-sizing debug info: shows exactly which county names got
-                # shrunk, from what width, and to what final font size, so
-                # text_max_width can be tuned precisely instead of guessed.
-                shrink_log = st.session_state.get('shrink_debug', [])
-                if shrink_log:
-                    shrunk_count = sum(1 for r in shrink_log if r['shrunk'])
-                    with st.expander(f"🔍 Text sizing debug ({shrunk_count}/{len(shrink_log)} shrunk)"):
-                        st.caption(
-                            f"Current threshold: text_max_width = {text_max_width}px, "
-                            f"base font size = {font_size}, floor = {text_min_font_size}"
-                        )
-                        for row in shrink_log:
-                            if row['original_width_px'] is None:
-                                continue
-                            status = "🔻 shrunk" if row['shrunk'] else "✅ fits as-is"
-                            st.write(
-                                f"**{row['label']}** — rendered width: {row['original_width_px']:.0f}px "
-                                f"→ {status} (font size {row['base_font_size']} → {row['final_font_size']})"
-                            )
-                
-                # Individual downloads
-                with st.expander("Download Individual County Maps"):
-                    cols = st.columns(3)
-                    for idx, (filename, img_bytes) in enumerate(county_images.items()):
-                        col = cols[idx % 3]
-                        with col:
-                            # Extract county name for display
-                            county_display = filename.replace(f"{state_name}_", "").replace(".png", "").replace("_", " ")
-                            st.download_button(
-                                label=county_display,
-                                data=img_bytes,
-                                file_name=filename,
-                                mime="image/png",
-                                key=f"download_county_{idx}"
-                            )
+                # Option to use in generator
+                if st.button("✅ Use This in Generator", key="use_processed"):
+                    processed_name = f"processed_{bg_overlay_choice}"
+                    st.session_state['saved_overlays'][processed_name] = st.session_state['processed_overlay']
+                    st.success(f"✅ Added as '{processed_name}' to overlay list! Switch to the generator tabs to use it.")
+                    st.rerun()
             else:
-                st.info("Configure settings and click 'Generate County Maps' to create maps.")
-                st.markdown("""
+                st.info("Click 'Remove Background' to see the result")
+    
+with tab4:
+    st.header("🗺️ County Map Generator")
+    st.write("Generate individual county maps for US states with highlighted counties.")
+    
+    # State selection
+    us_states = {
+        'AL': 'Alabama', 'AK': 'Alaska', 'AZ': 'Arizona', 'AR': 'Arkansas',
+        'CA': 'California', 'CO': 'Colorado', 'CT': 'Connecticut', 'DE': 'Delaware',
+        'FL': 'Florida', 'GA': 'Georgia', 'HI': 'Hawaii', 'ID': 'Idaho',
+        'IL': 'Illinois', 'IN': 'Indiana', 'IA': 'Iowa', 'KS': 'Kansas',
+        'KY': 'Kentucky', 'LA': 'Louisiana', 'ME': 'Maine', 'MD': 'Maryland',
+        'MA': 'Massachusetts', 'MI': 'Michigan', 'MN': 'Minnesota', 'MS': 'Mississippi',
+        'MO': 'Missouri', 'MT': 'Montana', 'NE': 'Nebraska', 'NV': 'Nevada',
+        'NH': 'New Hampshire', 'NJ': 'New Jersey', 'NM': 'New Mexico', 'NY': 'New York',
+        'NC': 'North Carolina', 'ND': 'North Dakota', 'OH': 'Ohio', 'OK': 'Oklahoma',
+        'OR': 'Oregon', 'PA': 'Pennsylvania', 'RI': 'Rhode Island', 'SC': 'South Carolina',
+        'SD': 'South Dakota', 'TN': 'Tennessee', 'TX': 'Texas', 'UT': 'Utah',
+        'VT': 'Vermont', 'VA': 'Virginia', 'WA': 'Washington', 'WV': 'West Virginia',
+        'WI': 'Wisconsin', 'WY': 'Wyoming', 'DC': 'Washington DC'
+    }
+    
+    col1, col2 = st.columns([1, 1])
+    
+    with col1:
+        st.subheader("Settings")
+        
+        # State selection
+        selected_state = st.selectbox(
+            "Select State:",
+            options=list(us_states.keys()),
+            format_func=lambda x: f"{x} - {us_states[x]}"
+        )
+        
+        # Check if local file exists
+        local_shapefile_path = 'cb_2020_us_county_20m.zip'
+        
+        use_local_file = os.path.exists(local_shapefile_path)
+        
+        if use_local_file:
+            st.success("✅ Using included shapefile")
+            county_shapefile_source = "local"
+        else:
+            # Upload county shapefile
+            county_shapefile = st.file_uploader(
+                "Upload County Shapefile (ZIP)",
+                type=['zip'],
+                help="Upload a ZIP file containing county shapefiles (e.g., cb_2020_us_county_20m.zip from Census Bureau)"
+            )
+            county_shapefile_source = "upload"
+        
+        # Color settings
+        highlight_color = st.color_picker("Highlight Color (selected county)", "#FFA500")
+        base_color = st.color_picker("Base Color (other counties)", "#06204a")
+
+        # County outline color
+        outline_color = st.color_picker("County Outline Color", "#06204a")
+        
+        # Output mode selection
+        output_mode = st.radio(
+            "Output Mode:",
+            options=["Maps Only", "Complete Images (with template & text)"],
+            key="county_output_mode",
+            help="Maps Only: Just county maps. Complete Images: Combines maps with template and adds '[County] residents needed!' text."
+        )
+        
+        # DPI setting
+        dpi = st.slider("Image Quality (DPI)", 100, 600, 300, step=50)
+        
+        # Show template options if Complete Images is selected
+        use_template = output_mode == "Complete Images (with template & text)"
+        
+        if use_template and not (template_file and font_file):
+            st.warning("⚠️ Please upload a template image and font in the sidebar to use Complete Images mode.")
+        
+        # Generate button
+        can_generate = use_local_file or (county_shapefile_source == "upload" and 'county_shapefile' in locals() and county_shapefile is not None)
+        
+        if use_template:
+            can_generate = can_generate and template_file and font_file
+        
+        if st.button("🗺️ Generate County Maps", type="primary", key="generate_counties", disabled=not can_generate):
+            with st.spinner(f"Generating county maps for {us_states[selected_state]}..."):
+                try:
+                    # Read the shapefile
+                    if use_local_file:
+                        counties_gdf = gpd.read_file(local_shapefile_path)
+                    else:
+                        counties_gdf = gpd.read_file(county_shapefile)
+                    
+                    # Filter to selected state
+                    state_counties = counties_gdf[counties_gdf['STUSPS'] == selected_state]
+                    
+                    if len(state_counties) == 0:
+                        st.error(f"No counties found for {selected_state}. Please check your shapefile.")
+                    else:
+                        state_name = state_counties.iloc[0]['STATE_NAME']
+                        
+                        # Create a dictionary to store generated images
+                        county_images = {}
+                        st.session_state['shrink_debug'] = []  # reset debug log for this batch
+                        progress_bar = st.progress(0)
+                        
+                        total_counties = len(state_counties)
+                        
+                        for idx, (_, county_row) in enumerate(state_counties.iterrows()):
+                            county_name = county_row['NAME']
+                            county_fips = county_row['GEOID']
+                            
+                            # Create color column
+                            state_counties_copy = state_counties.copy()
+                            state_counties_copy['color'] = state_counties_copy['GEOID'].apply(
+                                lambda x: highlight_color if x == county_fips else base_color
+                            )
+                            
+                            # Create plot
+                            fig, ax = plt.subplots(figsize=(8, 6))
+                            state_counties_copy.plot(
+                                ax=ax,
+                                color=state_counties_copy['color'],
+                                edgecolor=outline_color,
+                                linewidth=0.5
+                            )
+                            
+                            # Remove axes
+                            ax.set_axis_off()
+                            
+                            # Save to BytesIO
+                            buf = io.BytesIO()
+                            plt.savefig(
+                                buf,
+                                format='PNG',
+                                dpi=dpi,
+                                bbox_inches='tight',
+                                transparent=True,
+                                facecolor='none'
+                            )
+                            plt.close(fig)
+                            buf.seek(0)
+                            
+                            # If using template mode, combine with template and text
+                            if use_template:
+                                # Load the county map as an overlay
+                                county_map_img = Image.open(buf).convert("RGBA")
+                                
+                                # Generate the complete image
+                                canvas = template.copy()
+                                draw = ImageDraw.Draw(canvas)
+                                
+                                # Determine subdivision type based on state
+                                if selected_state == 'AK':
+                                    subdivision = 'borough'
+                                elif selected_state == 'LA':
+                                    subdivision = 'parish'
+                                else:
+                                    subdivision = 'county'
+                                
+                                # Build the text first so we can measure it when
+                                # computing a safe overlay box (must not overlap
+                                # the text above, and must not grow into
+                                # template graphics/text below)
+                                text = f"{county_name} {subdivision} residents needed!"
+                                
+                                # Apply special scaling for Alaska (it's geographically huge)
+                                if selected_state == 'AK':
+                                    # Alaska gets 6x the normal max dimensions. Expand the
+                                    # box outward from the same horizontal center as the
+                                    # normal box, rather than growing it to the right only,
+                                    # so Alaska doesn't shift off-center.
+                                    box_w, box_h = overlay_max_w * 6, overlay_max_h * 6
+                                    box_x = overlay_x - (box_w - overlay_max_w) // 2
+                                else:
+                                    box_w, box_h = overlay_max_w, overlay_max_h
+                                    box_x = overlay_x
+                                
+                                # Constrain the box so tall/thin shapes never
+                                # overlap the text above or below them
+                                box_top, box_h = compute_safe_overlay_box(
+                                    draw, text, font, overlay_y, box_h,
+                                    bottom_limit=overlay_bottom_limit, padding=20
+                                )
+                                
+                                county_map_resized = fit_into(county_map_img, box_w, box_h)
+                                
+                                # Paste county map overlay, centered within its box
+                                paste_centered(canvas, county_map_resized, box_x, box_top, box_w, box_h)
+                                
+                                # Draw text
+                                draw_text(draw, text, font, debug_label=county_name)
+                                
+                                # Save the complete image
+                                final_buf = io.BytesIO()
+                                canvas.save(final_buf, format='PNG')
+                                final_buf.seek(0)
+                                buf = final_buf
+                            
+                            # Clean filename
+                            safe_county_name = "".join(c if c.isalnum() else "_" for c in county_name)
+                            if use_template:
+                                filename = f"template_{state_name}_{safe_county_name}.png"
+                            else:
+                                filename = f"{state_name}_{safe_county_name}.png"
+                            
+                            county_images[filename] = buf.getvalue()
+                            
+                            # Update progress
+                            progress_bar.progress((idx + 1) / total_counties)
+                        
+                        st.session_state['county_images'] = county_images
+                        st.session_state['county_state_name'] = state_name
+                        st.session_state['county_mode_saved'] = output_mode
+                        st.success(f"✅ Generated {len(county_images)} county {'images' if use_template else 'maps'} for {state_name}!")
+                
+                except Exception as e:
+                    st.error(f"Error processing shapefile: {str(e)}")
+    
+    with col2:
+        st.subheader("Results")
+        
+        if 'county_images' in st.session_state and st.session_state['county_images']:
+            county_images = st.session_state['county_images']
+            state_name = st.session_state['county_state_name']
+            output_mode = st.session_state.get('county_mode_saved', 'Maps Only')
+            
+            # Preview first county
+            first_image = list(county_images.values())[0]
+            first_filename = list(county_images.keys())[0]
+            st.image(first_image, caption=f"Preview: {first_filename}", use_container_width=True)
+            
+            # Create ZIP file
+            zip_buf = io.BytesIO()
+            with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                for filename, img_bytes in county_images.items():
+                    zip_file.writestr(filename, img_bytes)
+            
+            zip_buf.seek(0)
+            
+            # Download ZIP
+            label_text = f"⬇️ Download All {len(county_images)} County {'Images' if output_mode == 'Complete Images (with template & text)' else 'Maps'} (ZIP)"
+            st.download_button(
+                label=label_text,
+                data=zip_buf.getvalue(),
+                file_name=f"{state_name}_county_{'images' if output_mode == 'Complete Images (with template & text)' else 'maps'}.zip",
+                mime="application/zip",
+                key="download_county_zip"
+            )
+            
+            # Text-sizing debug info: shows exactly which county names got
+            # shrunk, from what width, and to what final font size, so
+            # text_max_width can be tuned precisely instead of guessed.
+            shrink_log = st.session_state.get('shrink_debug', [])
+            if shrink_log:
+                shrunk_count = sum(1 for r in shrink_log if r['shrunk'])
+                with st.expander(f"🔍 Text sizing debug ({shrunk_count}/{len(shrink_log)} shrunk)"):
+                    st.caption(
+                        f"Current threshold: text_max_width = {text_max_width}px, "
+                        f"base font size = {font_size}, floor = {text_min_font_size}"
+                    )
+                    for row in shrink_log:
+                        if row['original_width_px'] is None:
+                            continue
+                        status = "🔻 shrunk" if row['shrunk'] else "✅ fits as-is"
+                        st.write(
+                            f"**{row['label']}** — rendered width: {row['original_width_px']:.0f}px "
+                            f"→ {status} (font size {row['base_font_size']} → {row['final_font_size']})"
+                        )
+            
+            # Individual downloads
+            with st.expander("Download Individual County Maps"):
+                cols = st.columns(3)
+                for idx, (filename, img_bytes) in enumerate(county_images.items()):
+                    col = cols[idx % 3]
+                    with col:
+                        # Extract county name for display
+                        county_display = filename.replace(f"{state_name}_", "").replace(".png", "").replace("_", " ")
+                        st.download_button(
+                            label=county_display,
+                            data=img_bytes,
+                            file_name=filename,
+                            mime="image/png",
+                            key=f"download_county_{idx}"
+                        )
+        else:
+            st.info("Configure settings and click 'Generate County Maps' to create maps.")
+            st.markdown("""
                 ### If new shapefiles are needed, how to get county shapefiles:
                 1. Visit the [US Census Bureau TIGER/Line Shapefiles](https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.html)
                 2. Download the county shapefile (e.g., `cb_2020_us_county_20m.zip`)
@@ -632,261 +644,261 @@ if template_file and font_file:
                 The generator will create individual maps for each county in your selected state, 
                 with each county highlighted in turn.
                 """)
-        
-    with tab5:
-        st.header("🇺🇸 State Map Generator")
-        st.write("Generate one image per US state (all 50 + DC) from a folder of pre-made state images, optionally composited onto your template with text.")
+    
+with tab5:
+    st.header("🇺🇸 State Map Generator")
+    st.write("Generate one image per US state (all 50 + DC) from a folder of pre-made state images, optionally composited onto your template with text.")
 
-        col1, col2 = st.columns([1, 1])
+    col1, col2 = st.columns([1, 1])
 
-        with col1:
-            st.subheader("Settings")
+    with col1:
+        st.subheader("Settings")
 
-            def normalize_key(s):
-                """Lowercase and strip everything but letters/digits, so
+        def normalize_key(s):
+            """Lowercase and strip everything but letters/digits, so
                 'New York.png', 'new_york.PNG', and 'NEW-YORK.jpg' all match."""
-                return "".join(ch for ch in s.lower() if ch.isalnum())
+            return "".join(ch for ch in s.lower() if ch.isalnum())
 
-            # Check for a local folder of pre-made per-state images first
-            local_state_images_dir = 'state_images'
-            use_local_state_images = os.path.isdir(local_state_images_dir)
+        # Check for a local folder of pre-made per-state images first
+        local_state_images_dir = 'state_images'
+        use_local_state_images = os.path.isdir(local_state_images_dir)
 
-            state_images_zip = None
-            if use_local_state_images:
-                st.success(f"✅ Using included state images folder ('{local_state_images_dir}')")
-            else:
-                state_images_zip = st.file_uploader(
-                    "Upload State Images (ZIP)",
-                    type=['zip'],
-                    help="No 'state_images' folder found alongside the app. Upload a ZIP file containing one image per state, named by state name or abbreviation (e.g. 'Alabama.png' or 'AL.png').",
-                    key="state_images_zip_uploader"
-                )
-
-            # Output mode selection
-            state_output_mode = st.radio(
-                "Output Mode:",
-                options=["Maps Only", "Complete Images (with template & text)"],
-                key="state_output_mode",
-                help="Maps Only: Just the pre-made state images, packaged for download. Complete Images: Combines each state image with your template and adds '[State] residents needed!' text."
+        state_images_zip = None
+        if use_local_state_images:
+            st.success(f"✅ Using included state images folder ('{local_state_images_dir}')")
+        else:
+            state_images_zip = st.file_uploader(
+                "Upload State Images (ZIP)",
+                type=['zip'],
+                help="No 'state_images' folder found alongside the app. Upload a ZIP file containing one image per state, named by state name or abbreviation (e.g. 'Alabama.png' or 'AL.png').",
+                key="state_images_zip_uploader"
             )
 
-            # Recolor option
-            recolor_states = st.checkbox(
-                "Recolor state images", value=False, key="recolor_states_checkbox",
-                help="Replaces the color of the state shape with a custom color, while keeping its transparent background and edge anti-aliasing intact."
-            )
-            state_recolor_color = None
-            if recolor_states:
-                state_recolor_color = st.color_picker("State Image Color", "#06204a", key="state_recolor_color")
-                state_recolor_rgb = tuple(int(state_recolor_color.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
+        # Output mode selection
+        state_output_mode = st.radio(
+            "Output Mode:",
+            options=["Maps Only", "Complete Images (with template & text)"],
+            key="state_output_mode",
+            help="Maps Only: Just the pre-made state images, packaged for download. Complete Images: Combines each state image with your template and adds '[State] residents needed!' text."
+        )
 
-            # Show template options if Complete Images is selected
-            use_state_template = state_output_mode == "Complete Images (with template & text)"
+        # Recolor option
+        recolor_states = st.checkbox(
+            "Recolor state images", value=False, key="recolor_states_checkbox",
+            help="Replaces the color of the state shape with a custom color, while keeping its transparent background and edge anti-aliasing intact."
+        )
+        state_recolor_color = None
+        if recolor_states:
+            state_recolor_color = st.color_picker("State Image Color", "#06204a", key="state_recolor_color")
+            state_recolor_rgb = tuple(int(state_recolor_color.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
 
-            if use_state_template and not (template_file and font_file):
-                st.warning("⚠️ Please upload a template image and font in the sidebar to use Complete Images mode.")
+        # Show template options if Complete Images is selected
+        use_state_template = state_output_mode == "Complete Images (with template & text)"
 
-            # Generate button
-            can_generate_states = use_local_state_images or state_images_zip is not None
+        if use_state_template and not (template_file and font_file):
+            st.warning("⚠️ Please upload a template image and font in the sidebar to use Complete Images mode.")
 
-            if use_state_template:
-                can_generate_states = can_generate_states and template_file and font_file
+        # Generate button
+        can_generate_states = use_local_state_images or state_images_zip is not None
 
-            if st.button("🗺️ Generate All State Maps", type="primary", key="generate_states", disabled=not can_generate_states):
-                with st.spinner("Loading state images and generating outputs..."):
-                    try:
-                        # Build a lookup of available images: normalized filename (no
-                        # extension) -> raw image bytes
-                        image_lookup = {}
+        if use_state_template:
+            can_generate_states = can_generate_states and template_file and font_file
 
-                        if use_local_state_images:
-                            for fname in sorted(os.listdir(local_state_images_dir)):
-                                fpath = os.path.join(local_state_images_dir, fname)
-                                if not os.path.isfile(fpath):
+        if st.button("🗺️ Generate All State Maps", type="primary", key="generate_states", disabled=not can_generate_states):
+            with st.spinner("Loading state images and generating outputs..."):
+                try:
+                    # Build a lookup of available images: normalized filename (no
+                    # extension) -> raw image bytes
+                    image_lookup = {}
+
+                    if use_local_state_images:
+                        for fname in sorted(os.listdir(local_state_images_dir)):
+                            fpath = os.path.join(local_state_images_dir, fname)
+                            if not os.path.isfile(fpath):
+                                continue
+                            stem, ext = os.path.splitext(fname)
+                            if ext.lower() not in ('.png', '.jpg', '.jpeg'):
+                                continue
+                            with open(fpath, 'rb') as f:
+                                image_lookup[normalize_key(stem)] = f.read()
+                    else:
+                        with zipfile.ZipFile(state_images_zip) as zf:
+                            for info in zf.infolist():
+                                if info.is_dir():
                                     continue
+                                fname = os.path.basename(info.filename)
                                 stem, ext = os.path.splitext(fname)
                                 if ext.lower() not in ('.png', '.jpg', '.jpeg'):
                                     continue
-                                with open(fpath, 'rb') as f:
-                                    image_lookup[normalize_key(stem)] = f.read()
-                        else:
-                            with zipfile.ZipFile(state_images_zip) as zf:
-                                for info in zf.infolist():
-                                    if info.is_dir():
-                                        continue
-                                    fname = os.path.basename(info.filename)
-                                    stem, ext = os.path.splitext(fname)
-                                    if ext.lower() not in ('.png', '.jpg', '.jpeg'):
-                                        continue
-                                    image_lookup[normalize_key(stem)] = zf.read(info)
+                                image_lookup[normalize_key(stem)] = zf.read(info)
 
-                        if not image_lookup:
-                            st.error("No image files found. Please check the folder/ZIP.")
-                        else:
-                            state_images = {}
-                            missing_states = []
-                            st.session_state['shrink_debug'] = []  # reset debug log for this batch
-                            progress_bar = st.progress(0)
+                    if not image_lookup:
+                        st.error("No image files found. Please check the folder/ZIP.")
+                    else:
+                        state_images = {}
+                        missing_states = []
+                        st.session_state['shrink_debug'] = []  # reset debug log for this batch
+                        progress_bar = st.progress(0)
 
-                            all_abbrevs = list(us_states.keys())
-                            total_states = len(all_abbrevs)
+                        all_abbrevs = list(us_states.keys())
+                        total_states = len(all_abbrevs)
 
-                            for idx, abbrev in enumerate(all_abbrevs):
-                                state_full_name = us_states[abbrev]
+                        for idx, abbrev in enumerate(all_abbrevs):
+                            state_full_name = us_states[abbrev]
 
-                                # Match by full state name first, then abbreviation
-                                match_bytes = image_lookup.get(normalize_key(state_full_name))
-                                if match_bytes is None:
-                                    match_bytes = image_lookup.get(normalize_key(abbrev))
+                            # Match by full state name first, then abbreviation
+                            match_bytes = image_lookup.get(normalize_key(state_full_name))
+                            if match_bytes is None:
+                                match_bytes = image_lookup.get(normalize_key(abbrev))
 
-                                if match_bytes is None:
-                                    missing_states.append(state_full_name)
-                                    progress_bar.progress((idx + 1) / total_states)
-                                    continue
-
-                                state_map_img = Image.open(io.BytesIO(match_bytes)).convert("RGBA")
-
-                                if recolor_states:
-                                    state_map_img = recolor_visible_pixels(state_map_img, state_recolor_rgb)
-
-                                # If using template mode, combine with template and text
-                                if use_state_template:
-                                    canvas = template.copy()
-                                    draw = ImageDraw.Draw(canvas)
-
-                                    text = f"{state_full_name} residents needed!"
-
-                                    # Apply special scaling for Alaska (it's geographically huge)
-                                    if abbrev == 'AK':
-                                        # Alaska gets 6x the normal max dimensions. Expand the
-                                        # box outward from the same horizontal center as the
-                                        # normal box, rather than growing it to the right only,
-                                        # so Alaska doesn't shift off-center.
-                                        box_w, box_h = overlay_max_w * 6, overlay_max_h * 6
-                                        box_x = overlay_x - (box_w - overlay_max_w) // 2
-                                    else:
-                                        box_w, box_h = overlay_max_w, overlay_max_h
-                                        box_x = overlay_x
-
-                                    # Constrain the box so tall/thin shapes never
-                                    # overlap the text above or below them
-                                    box_top, box_h = compute_safe_overlay_box(
-                                        draw, text, font, overlay_y, box_h,
-                                        bottom_limit=overlay_bottom_limit, padding=20
-                                    )
-
-                                    state_map_resized = fit_into(state_map_img, box_w, box_h)
-
-                                    # Paste state image, centered within its box
-                                    paste_centered(canvas, state_map_resized, box_x, box_top, box_w, box_h)
-
-                                    # Draw text
-                                    draw_text(draw, text, font, debug_label=state_full_name)
-
-                                    # Save the complete image
-                                    final_buf = io.BytesIO()
-                                    canvas.save(final_buf, format='PNG')
-                                    final_buf.seek(0)
-                                    out_bytes = final_buf.getvalue()
-                                else:
-                                    # Maps Only: just repackage the source image as PNG
-                                    out_buf = io.BytesIO()
-                                    state_map_img.save(out_buf, format='PNG')
-                                    out_buf.seek(0)
-                                    out_bytes = out_buf.getvalue()
-
-                                # Clean filename
-                                safe_state_name = "".join(c if c.isalnum() else "_" for c in state_full_name)
-                                if use_state_template:
-                                    filename = f"template_{safe_state_name}.png"
-                                else:
-                                    filename = f"{safe_state_name}.png"
-
-                                state_images[filename] = out_bytes
-
-                                # Update progress
+                            if match_bytes is None:
+                                missing_states.append(state_full_name)
                                 progress_bar.progress((idx + 1) / total_states)
+                                continue
 
-                            st.session_state['state_images'] = state_images
-                            st.session_state['state_mode_saved'] = state_output_mode
+                            state_map_img = Image.open(io.BytesIO(match_bytes)).convert("RGBA")
 
-                            if state_images:
-                                st.success(f"✅ Generated {len(state_images)} state {'images' if use_state_template else 'maps'}!")
-                            if missing_states:
-                                st.warning(
-                                    f"⚠️ No image found for: {', '.join(missing_states)}. "
-                                    "Filenames should match the state name or abbreviation "
-                                    "(e.g. 'Alabama.png' or 'AL.png')."
+                            if recolor_states:
+                                state_map_img = recolor_visible_pixels(state_map_img, state_recolor_rgb)
+
+                            # If using template mode, combine with template and text
+                            if use_state_template:
+                                canvas = template.copy()
+                                draw = ImageDraw.Draw(canvas)
+
+                                text = f"{state_full_name} residents needed!"
+
+                                # Apply special scaling for Alaska (it's geographically huge)
+                                if abbrev == 'AK':
+                                    # Alaska gets 6x the normal max dimensions. Expand the
+                                    # box outward from the same horizontal center as the
+                                    # normal box, rather than growing it to the right only,
+                                    # so Alaska doesn't shift off-center.
+                                    box_w, box_h = overlay_max_w * 6, overlay_max_h * 6
+                                    box_x = overlay_x - (box_w - overlay_max_w) // 2
+                                else:
+                                    box_w, box_h = overlay_max_w, overlay_max_h
+                                    box_x = overlay_x
+
+                                # Constrain the box so tall/thin shapes never
+                                # overlap the text above or below them
+                                box_top, box_h = compute_safe_overlay_box(
+                                    draw, text, font, overlay_y, box_h,
+                                    bottom_limit=overlay_bottom_limit, padding=20
                                 )
 
-                    except Exception as e:
-                        st.error(f"Error processing state images: {str(e)}")
+                                state_map_resized = fit_into(state_map_img, box_w, box_h)
 
-        with col2:
-            st.subheader("Results")
+                                # Paste state image, centered within its box
+                                paste_centered(canvas, state_map_resized, box_x, box_top, box_w, box_h)
 
-            if 'state_images' in st.session_state and st.session_state['state_images']:
-                state_images = st.session_state['state_images']
-                state_output_mode_saved = st.session_state.get('state_mode_saved', 'Maps Only')
+                                # Draw text
+                                draw_text(draw, text, font, debug_label=state_full_name)
 
-                # Preview first state
-                first_image = list(state_images.values())[0]
-                first_filename = list(state_images.keys())[0]
-                st.image(first_image, caption=f"Preview: {first_filename}", use_container_width=True)
+                                # Save the complete image
+                                final_buf = io.BytesIO()
+                                canvas.save(final_buf, format='PNG')
+                                final_buf.seek(0)
+                                out_bytes = final_buf.getvalue()
+                            else:
+                                # Maps Only: just repackage the source image as PNG
+                                out_buf = io.BytesIO()
+                                state_map_img.save(out_buf, format='PNG')
+                                out_buf.seek(0)
+                                out_bytes = out_buf.getvalue()
 
-                # Create ZIP file
-                zip_buf = io.BytesIO()
-                with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                    for filename, img_bytes in state_images.items():
-                        zip_file.writestr(filename, img_bytes)
+                            # Clean filename
+                            safe_state_name = "".join(c if c.isalnum() else "_" for c in state_full_name)
+                            if use_state_template:
+                                filename = f"template_{safe_state_name}.png"
+                            else:
+                                filename = f"{safe_state_name}.png"
 
-                zip_buf.seek(0)
+                            state_images[filename] = out_bytes
 
-                # Download ZIP
-                label_text = f"⬇️ Download All {len(state_images)} State {'Images' if state_output_mode_saved == 'Complete Images (with template & text)' else 'Maps'} (ZIP)"
-                st.download_button(
-                    label=label_text,
-                    data=zip_buf.getvalue(),
-                    file_name=f"us_state_{'images' if state_output_mode_saved == 'Complete Images (with template & text)' else 'maps'}.zip",
-                    mime="application/zip",
-                    key="download_state_zip"
-                )
+                            # Update progress
+                            progress_bar.progress((idx + 1) / total_states)
 
-                # Text-sizing debug info (shared with the County Map Generator's log)
-                shrink_log = st.session_state.get('shrink_debug', [])
-                if shrink_log:
-                    shrunk_count = sum(1 for r in shrink_log if r['shrunk'])
-                    with st.expander(f"🔍 Text sizing debug ({shrunk_count}/{len(shrink_log)} shrunk)"):
-                        st.caption(
-                            f"Current threshold: text_max_width = {text_max_width}px, "
-                            f"base font size = {font_size}, floor = {text_min_font_size}"
+                        st.session_state['state_images'] = state_images
+                        st.session_state['state_mode_saved'] = state_output_mode
+
+                        if state_images:
+                            st.success(f"✅ Generated {len(state_images)} state {'images' if use_state_template else 'maps'}!")
+                        if missing_states:
+                            st.warning(
+                                f"⚠️ No image found for: {', '.join(missing_states)}. "
+                                "Filenames should match the state name or abbreviation "
+                                "(e.g. 'Alabama.png' or 'AL.png')."
+                            )
+
+                except Exception as e:
+                    st.error(f"Error processing state images: {str(e)}")
+
+    with col2:
+        st.subheader("Results")
+
+        if 'state_images' in st.session_state and st.session_state['state_images']:
+            state_images = st.session_state['state_images']
+            state_output_mode_saved = st.session_state.get('state_mode_saved', 'Maps Only')
+
+            # Preview first state
+            first_image = list(state_images.values())[0]
+            first_filename = list(state_images.keys())[0]
+            st.image(first_image, caption=f"Preview: {first_filename}", use_container_width=True)
+
+            # Create ZIP file
+            zip_buf = io.BytesIO()
+            with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                for filename, img_bytes in state_images.items():
+                    zip_file.writestr(filename, img_bytes)
+
+            zip_buf.seek(0)
+
+            # Download ZIP
+            label_text = f"⬇️ Download All {len(state_images)} State {'Images' if state_output_mode_saved == 'Complete Images (with template & text)' else 'Maps'} (ZIP)"
+            st.download_button(
+                label=label_text,
+                data=zip_buf.getvalue(),
+                file_name=f"us_state_{'images' if state_output_mode_saved == 'Complete Images (with template & text)' else 'maps'}.zip",
+                mime="application/zip",
+                key="download_state_zip"
+            )
+
+            # Text-sizing debug info (shared with the County Map Generator's log)
+            shrink_log = st.session_state.get('shrink_debug', [])
+            if shrink_log:
+                shrunk_count = sum(1 for r in shrink_log if r['shrunk'])
+                with st.expander(f"🔍 Text sizing debug ({shrunk_count}/{len(shrink_log)} shrunk)"):
+                    st.caption(
+                        f"Current threshold: text_max_width = {text_max_width}px, "
+                        f"base font size = {font_size}, floor = {text_min_font_size}"
+                    )
+                    for row in shrink_log:
+                        if row['original_width_px'] is None:
+                            continue
+                        status = "🔻 shrunk" if row['shrunk'] else "✅ fits as-is"
+                        st.write(
+                            f"**{row['label']}** — rendered width: {row['original_width_px']:.0f}px "
+                            f"→ {status} (font size {row['base_font_size']} → {row['final_font_size']})"
                         )
-                        for row in shrink_log:
-                            if row['original_width_px'] is None:
-                                continue
-                            status = "🔻 shrunk" if row['shrunk'] else "✅ fits as-is"
-                            st.write(
-                                f"**{row['label']}** — rendered width: {row['original_width_px']:.0f}px "
-                                f"→ {status} (font size {row['base_font_size']} → {row['final_font_size']})"
-                            )
 
-                # Individual downloads
-                with st.expander("Download Individual State Maps"):
-                    cols = st.columns(3)
-                    for idx, (filename, img_bytes) in enumerate(state_images.items()):
-                        col = cols[idx % 3]
-                        with col:
-                            state_display = filename.replace("template_", "").replace(".png", "").replace("_", " ")
-                            st.download_button(
-                                label=state_display,
-                                data=img_bytes,
-                                file_name=filename,
-                                mime="image/png",
-                                key=f"download_state_{idx}"
-                            )
-            else:
-                st.info("Configure settings and click 'Generate All State Maps' to create maps.")
-                st.markdown("""
+            # Individual downloads
+            with st.expander("Download Individual State Maps"):
+                cols = st.columns(3)
+                for idx, (filename, img_bytes) in enumerate(state_images.items()):
+                    col = cols[idx % 3]
+                    with col:
+                        state_display = filename.replace("template_", "").replace(".png", "").replace("_", " ")
+                        st.download_button(
+                            label=state_display,
+                            data=img_bytes,
+                            file_name=filename,
+                            mime="image/png",
+                            key=f"download_state_{idx}"
+                        )
+        else:
+            st.info("Configure settings and click 'Generate All State Maps' to create maps.")
+            st.markdown("""
                 ### How this works:
                 1. If you need new maps, place a folder named `state_images` next to the app, containing
                    one image per state (PNG or JPG), named by state name or abbreviation
@@ -902,11 +914,14 @@ if template_file and font_file:
                 so you can spot missing/misnamed files easily.
                 """)
 
-    with tab1:
-        st.header("Single Image Generator")
-        
+with tab1:
+    st.header("Single Image Generator")
+
+    if not (template and font):
+        st.info("👈 Upload a template image and font file in the sidebar to use this tab.")
+    else:
         col1, col2 = st.columns([1, 1])
-        
+
         with col1:
             # Text input
             custom_text = st.text_area(
@@ -914,45 +929,48 @@ if template_file and font_file:
                 value="Your text here\ngoes on multiple lines!",
                 height=150
             )
-            
+
             # Overlay selection
             selected_overlay = None
             if overlays_dict:
-                overlay_choice = st.selectbox("Select overlay image (optional):", 
+                overlay_choice = st.selectbox("Select overlay image (optional):",
                                              ["None"] + list(overlays_dict.keys()))
                 if overlay_choice != "None":
                     selected_overlay = overlays_dict[overlay_choice]
-            
+
             # Generate button
             if st.button("🎨 Generate Preview", type="primary"):
                 preview_img = generate_image(template, selected_overlay, custom_text, font)
                 st.session_state['preview_img'] = preview_img
-        
+
         with col2:
             # Display preview
             if 'preview_img' in st.session_state:
                 st.image(st.session_state['preview_img'], caption="Preview", use_container_width=True)
-                
+
                 # Download button
                 buf = io.BytesIO()
                 st.session_state['preview_img'].save(buf, format='PNG')
                 buf.seek(0)
-                
+
                 st.download_button(
                     label="⬇️ Download Image",
                     data=buf.getvalue(),
                     file_name="generated_image.png",
                     mime="image/png"
                 )
-    
-    with tab2:
-        st.header("Batch Generator")
-        st.write("Generate multiple images at once with different text/overlay combinations.")
-        
+
+with tab2:
+    st.header("Batch Generator")
+    st.write("Generate multiple images at once with different text/overlay combinations.")
+
+    if not (template and font):
+        st.info("👈 Upload a template image and font file in the sidebar to use this tab.")
+    else:
         # Input area for batch data
         st.subheader("Enter Image Data")
         st.write("Format: `filename | text line 1 | text line 2 | ... | overlay_image_name (optional)`")
-        
+
         batch_input = st.text_area(
             "Enter one image per line:",
             value="""image1 | First line | Second line | overlay1.png
@@ -961,25 +979,25 @@ image3 | Just one line | overlay2.png""",
             height=200,
             help="Each line creates one image. Separate values with | symbol."
         )
-        
+
         if st.button("🚀 Generate Batch Images", type="primary"):
             lines = [line.strip() for line in batch_input.split('\n') if line.strip()]
-            
+
             if not lines:
                 st.error("Please enter at least one line of data")
             else:
                 progress_bar = st.progress(0)
                 generated_images = {}
-                
+
                 for idx, line in enumerate(lines):
                     parts = [p.strip() for p in line.split('|')]
-                    
+
                     if len(parts) < 2:
                         st.warning(f"Skipping line {idx+1}: needs at least filename and one text part")
                         continue
-                    
+
                     filename = parts[0]
-                    
+
                     # Check if last part is an overlay reference
                     overlay = None
                     if parts[-1] in overlays_dict:
@@ -987,30 +1005,30 @@ image3 | Just one line | overlay2.png""",
                         text_parts = parts[1:-1]
                     else:
                         text_parts = parts[1:]
-                    
+
                     custom_text = '\n'.join(text_parts)
-                    
+
                     # Generate image
                     img = generate_image(template, overlay, custom_text, font)
-                    
+
                     # Convert to bytes
                     buf = io.BytesIO()
                     img.save(buf, format='PNG')
                     buf.seek(0)
                     generated_images[f"{filename}.png"] = buf.getvalue()
-                    
+
                     progress_bar.progress((idx + 1) / len(lines))
-                
+
                 st.success(f"✅ Generated {len(generated_images)} images!")
-                
+
                 # Create ZIP file
                 zip_buf = io.BytesIO()
                 with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zip_file:
                     for filename, img_bytes in generated_images.items():
                         zip_file.writestr(filename, img_bytes)
-                
+
                 zip_buf.seek(0)
-                
+
                 # Download ZIP
                 st.download_button(
                     label="⬇️ Download All as ZIP",
@@ -1018,7 +1036,7 @@ image3 | Just one line | overlay2.png""",
                     file_name="generated_images.zip",
                     mime="application/zip"
                 )
-                
+
                 # Individual downloads
                 with st.expander("Download Individual Images"):
                     cols = st.columns(4)
@@ -1033,9 +1051,10 @@ image3 | Just one line | overlay2.png""",
                                 key=f"download_{idx}"
                             )
 
-else:
-    st.info("👈 Please upload a template image and font file in the sidebar to get started.")
-    
+if not (template and font):
+    st.info("👈 Upload a template image and font file in the sidebar to unlock the Single Image, Batch, and \"Complete Images\" tabs. County/State Map Generator \"Maps Only\" mode works right away.")
+
+with st.expander("ℹ️ How to Use"):
     st.markdown("""
     ### How to Use:
     
