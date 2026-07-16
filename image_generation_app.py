@@ -18,6 +18,21 @@ import os
 # Page config
 st.set_page_config(page_title="Custom Image Generator", layout="wide")
 
+st.markdown("""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&display=s
+wap');
+
+    html, body, [class*="css"] {
+        font-family: 'Inter', sans-serif;
+    }
+
+    h1, h2, h3, h4, h5, h6 {
+        font-family: 'DM Serif Display', serif;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 st.title("🎨 Custom Image Generator")
 st.write("Generate custom images by combining a template with overlays and text.")
 
