@@ -10,7 +10,7 @@ primaryColor="#2EBDEE"
 [theme.sidebar]
 primaryColor="#1988AE"
 
-[theme.fontFaces]
+[[theme.fontFaces]]
 family="inter"
 url="mms_image_generat/static/Inter-VariableFont_wdth,wght.ttf"
 style="normal"
