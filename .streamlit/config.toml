@@ -8,5 +8,6 @@ primaryColor="#2EBDEE"
 
 [theme.sidebar]
 backgroundColor="#0A2A59"
+secondaryBackgroundColor="#2EBDEE"
 primaryColor="#1988AE"
 
