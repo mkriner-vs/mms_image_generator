@@ -2,15 +2,10 @@
 enableStaticServing = true
 
 [theme]
-font="Nunito:https://fonts.googleapis.com/css2?family=Nunito&display=swap"
-codeFont="inter"
+font="Inter:https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap""
 base="dark"
 primaryColor="#2EBDEE"
 
 [theme.sidebar]
 primaryColor="#1988AE"
 
-[[theme.fontFaces]]
-family="inter"
-url="mms_image_generat/static/Inter-VariableFont_opsz,wght.ttf"
-style="normal"
