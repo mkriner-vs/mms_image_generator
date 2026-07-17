@@ -21,7 +21,7 @@ st.set_page_config(page_title="Custom Image Generator", layout="wide")
 st.title("🎨 Custom Image Generator")
 st.write("Generate custom images by combining a template with overlays and text.")
 
-logo = Image.open("static/logo_white.png").resize((550, 450))
+logo = Image.open("static/logo_white.png").resize((350, 250))
 st.sidebar.image(logo)
 
 
