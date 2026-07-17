@@ -23,16 +23,13 @@ st.write("Generate custom images by combining a template with overlays and text.
 
 st.logo("static/logo_white.png")
 
-st.markdown(
-    """
-    <style>
-        img[data-testid="stLogo"] {
-            height: 100px; /* Adjust value as needed */
-        }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+st.html("""
+  <style>
+    [alt=Logo] {
+      height: 5rem;
+    }
+  </style>
+        """)
 
 # File uploaders
 st.sidebar.header("Upload Files")
