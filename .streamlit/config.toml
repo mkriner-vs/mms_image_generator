@@ -2,7 +2,7 @@
 enableStaticServing = true
 
 [theme]
-font="inter"
+font="Nunito:https://fonts.googleapis.com/css2?family=Nunito&display=swap"
 codeFont="inter"
 base="dark"
 primaryColor="#2EBDEE"
