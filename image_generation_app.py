@@ -21,7 +21,7 @@ st.set_page_config(page_title="Custom Image Generator", layout="wide")
 st.title("🎨 Custom Image Generator")
 st.write("Generate custom images by combining a template with overlays and text.")
 
-st.logo("mms_image_generator/static/logo_white.png")
+st.logo("static/logo_white.png")
 
 # File uploaders
 st.sidebar.header("Upload Files")
