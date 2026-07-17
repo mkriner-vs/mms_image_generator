@@ -21,7 +21,18 @@ st.set_page_config(page_title="Custom Image Generator", layout="wide")
 st.title("🎨 Custom Image Generator")
 st.write("Generate custom images by combining a template with overlays and text.")
 
-st.logo("static/logo_white.png", size="large")
+st.logo("static/logo_white.png")
+
+st.markdown(
+    """
+    <style>
+        img[data-testid="stLogo"] {
+            height: 100px; /* Adjust value as needed */
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 # File uploaders
 st.sidebar.header("Upload Files")
