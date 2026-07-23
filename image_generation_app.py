@@ -38,8 +38,8 @@ overlay_files = st.sidebar.file_uploader("Upload Overlay Images", type=['png', '
 
 # Configuration inputs
 st.sidebar.header("Overlay Configuration")
-overlay_x = st.sidebar.number_input("Overlay X Position", value=2072, help="Horizontal position of the overlay box (top-left corner); + to move right, - to move left")
-overlay_y = st.sidebar.number_input("Overlay Y Position", value=40, help="Vertical position of the overlay box (top-left corner); + to move down, - to move up")
+overlay_x = st.sidebar.number_input("Overlay X Position", value=2072, help="Horizontal position of the overlay box (top-left corner); matches the top-right badge area on the July 2026 template")
+overlay_y = st.sidebar.number_input("Overlay Y Position", value=40, help="Vertical position of the overlay box (top-left corner)")
 overlay_max_w = st.sidebar.number_input("Overlay Max Width", value=880, help="Maximum width the overlay can be")
 overlay_max_h = st.sidebar.number_input("Overlay Max Height", value=720, help="Maximum height the overlay can be")
 overlay_auto_trim = st.sidebar.checkbox("Auto-trim transparent padding on overlay", value=True,
@@ -59,8 +59,8 @@ auto_center_text = st.sidebar.checkbox("Auto-center text horizontally", value=Fa
                                         help="Recentres the text based on its actual rendered width, so it stays centered no matter how long the text is (e.g. 'Alabama' vs 'California'). The July 2026 template is left-aligned, so this defaults off.")
 text_center_x = st.sidebar.number_input("Text Center X (used when auto-center is on)", value=1590,
                                          help="The horizontal point the text should be centered around.")
-text_x = st.sidebar.number_input("Text X Position (left edge)", value=230, help="Horizontal position of the text; + to move right, - to move left")
-text_y = st.sidebar.number_input("Text Y Position (top of first line)", value=930, help="Vertical position of the text; + to move down, - to move up")
+text_x = st.sidebar.number_input("Text X Position (left edge)", value=230, help="Horizontal position of the text")
+text_y = st.sidebar.number_input("Text Y Position (top of first line)", value=630, help="Vertical position of the text")
 text_spacing = st.sidebar.slider("Extra Line Spacing", 0, 50, 0,
                                   help="Extra pixels added on top of the font's natural line height between lines.")
 text_align = st.sidebar.selectbox("Text Alignment", ["left", "center", "right"], index=0,
@@ -117,21 +117,31 @@ def paste_centered(canvas, overlay_resized, box_x, box_y, box_w, box_h):
     canvas.alpha_composite(overlay_resized, (paste_x, paste_y))
 
 
-def clamp_box_to_zone(box_x, box_y, box_w, box_h, zone_max_w, zone_max_h):
+def clamp_box_to_zone(center_x, center_y, desired_w, desired_h, zone_max_w, zone_max_h,
+                       canvas_w=None, canvas_h=None):
     """
-    Given an overlay box that may have been expanded (e.g. Alaska scaled up
-    6x), caps its width/height to zone_max_w/zone_max_h and re-centers the
-    result on the same center point as the original box, so oversized shapes
-    grow evenly in all directions but never overflow the canvas or the
-    corner badge area on the new (July 2026) template.
+    Given a desired (possibly oversized) box size and the center point of the
+    *normal* overlay box, caps the size to zone_max_w/zone_max_h and returns a
+    box centered on that same center point. This keeps oversized shapes
+    (e.g. Alaska scaled 6x) growing evenly outward from the badge's center
+    instead of drifting off-canvas, which happens if you naively expand a box
+    from a fixed top-left corner.
+
+    If canvas_w/canvas_h are given, the box is additionally shifted (without
+    resizing) so it never extends past the edges of the canvas — a safety
+    net for when the badge sits close to a corner.
     """
-    capped_w = min(box_w, zone_max_w)
-    capped_h = min(box_h, zone_max_h)
-    center_x = box_x + box_w / 2
-    center_y = box_y + box_h / 2
-    new_x = center_x - capped_w / 2
-    new_y = center_y - capped_h / 2
-    return new_x, new_y, capped_w, capped_h
+    capped_w = min(desired_w, zone_max_w)
+    capped_h = min(desired_h, zone_max_h)
+    box_x = center_x - capped_w / 2
+    box_y = center_y - capped_h / 2
+
+    if canvas_w is not None:
+        box_x = max(0, min(box_x, canvas_w - capped_w))
+    if canvas_h is not None:
+        box_y = max(0, min(box_y, canvas_h - capped_h))
+
+    return box_x, box_y, capped_w, capped_h
 
 
 def get_font(size):
@@ -550,10 +560,13 @@ with tab4:
                                 # to the oversized-shape zone so it can never
                                 # overflow the canvas or run into the text.
                                 if selected_state == 'AK':
-                                    box_w, box_h = overlay_max_w * 6, overlay_max_h * 6
+                                    center_x = overlay_x + overlay_max_w / 2
+                                    center_y = overlay_y + overlay_max_h / 2
                                     box_x, box_y_, box_w, box_h = clamp_box_to_zone(
-                                        overlay_x, overlay_y, box_w, box_h,
-                                        overlay_zone_max_w, overlay_zone_max_h
+                                        center_x, center_y,
+                                        overlay_max_w * 6, overlay_max_h * 6,
+                                        overlay_zone_max_w, overlay_zone_max_h,
+                                        canvas_w=canvas.width, canvas_h=canvas.height
                                     )
                                 else:
                                     box_w, box_h = overlay_max_w, overlay_max_h
@@ -576,7 +589,7 @@ with tab4:
                             # Clean filename
                             safe_county_name = "".join(c if c.isalnum() else "_" for c in county_name)
                             if use_template:
-                                filename = f"{state_name}_{safe_county_name}.png"
+                                filename = f"template_{state_name}_{safe_county_name}.png"
                             else:
                                 filename = f"{state_name}_{safe_county_name}.png"
                             
@@ -805,10 +818,13 @@ with tab5:
                                 # to the oversized-shape zone so it can never
                                 # overflow the canvas or run into the text.
                                 if abbrev == 'AK':
-                                    box_w, box_h = overlay_max_w * 6, overlay_max_h * 6
+                                    center_x = overlay_x + overlay_max_w / 2
+                                    center_y = overlay_y + overlay_max_h / 2
                                     box_x, box_y_, box_w, box_h = clamp_box_to_zone(
-                                        overlay_x, overlay_y, box_w, box_h,
-                                        overlay_zone_max_w, overlay_zone_max_h
+                                        center_x, center_y,
+                                        overlay_max_w * 6, overlay_max_h * 6,
+                                        overlay_zone_max_w, overlay_zone_max_h,
+                                        canvas_w=canvas.width, canvas_h=canvas.height
                                     )
                                 else:
                                     box_w, box_h = overlay_max_w, overlay_max_h
@@ -837,7 +853,7 @@ with tab5:
                             # Clean filename
                             safe_state_name = "".join(c if c.isalnum() else "_" for c in state_full_name)
                             if use_state_template:
-                                filename = f"{safe_state_name}.png"
+                                filename = f"template_{safe_state_name}.png"
                             else:
                                 filename = f"{safe_state_name}.png"
 
