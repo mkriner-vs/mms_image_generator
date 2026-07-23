@@ -576,7 +576,7 @@ with tab4:
                             # Clean filename
                             safe_county_name = "".join(c if c.isalnum() else "_" for c in county_name)
                             if use_template:
-                                filename = f"template_{state_name}_{safe_county_name}.png"
+                                filename = f"{state_name}_{safe_county_name}.png"
                             else:
                                 filename = f"{state_name}_{safe_county_name}.png"
                             
@@ -837,7 +837,7 @@ with tab5:
                             # Clean filename
                             safe_state_name = "".join(c if c.isalnum() else "_" for c in state_full_name)
                             if use_state_template:
-                                filename = f"template_{safe_state_name}.png"
+                                filename = f"{safe_state_name}.png"
                             else:
                                 filename = f"{safe_state_name}.png"
 
