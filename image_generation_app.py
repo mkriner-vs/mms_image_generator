@@ -255,6 +255,51 @@ def recolor_visible_pixels(img, target_color_rgb):
     solid.putalpha(alpha)
     return solid
 
+
+def save_optimized_png(img, max_bytes=490 * 1024):
+    """Save a full template-composited image as PNG, progressively reducing
+    file size (via palette quantization, then downscaling as a last resort)
+    until it fits under max_bytes. Intended for the "Complete Images" outputs
+    (template + overlay + text), which are large photographic canvases —
+    NOT for the raw "Maps Only" county/state shape exports, which stay
+    untouched at full quality/transparency.
+
+    Returns a BytesIO positioned at 0."""
+    img = img.convert("RGBA")
+
+    def try_save(im, **kwargs):
+        b = io.BytesIO()
+        im.save(b, format='PNG', optimize=True, **kwargs)
+        return b
+
+    # 1. Plain optimized save at full color depth
+    buf = try_save(img, compress_level=9)
+    if buf.tell() <= max_bytes:
+        buf.seek(0)
+        return buf
+
+    # 2. Palette quantization (keeps transparency via tRNS, reduces color depth)
+    quantized = None
+    for colors in (256, 192, 128, 96, 64, 48, 32):
+        quantized = img.quantize(colors=colors, method=Image.FASTOCTREE)
+        buf = try_save(quantized)
+        if buf.tell() <= max_bytes:
+            buf.seek(0)
+            return buf
+
+    # 3. Downscale as a last resort, using the smallest palette from step 2
+    base_w, base_h = img.size
+    scale = 0.9
+    while buf.tell() > max_bytes and scale > 0.25:
+        new_size = (max(1, int(base_w * scale)), max(1, int(base_h * scale)))
+        resized = img.resize(new_size, Image.LANCZOS).quantize(colors=32, method=Image.FASTOCTREE)
+        buf = try_save(resized)
+        scale -= 0.1
+
+    buf.seek(0)
+    return buf
+
+
 def generate_image(template, overlay, custom_text, font):
     canvas = template.copy()
     draw = ImageDraw.Draw(canvas)
@@ -580,10 +625,9 @@ with tab4:
                                 # Draw text
                                 draw_text(draw, text, font, debug_label=county_name)
                                 
-                                # Save the complete image
-                                final_buf = io.BytesIO()
-                                canvas.save(final_buf, format='PNG')
-                                final_buf.seek(0)
+                                # Save the complete image, capped to ~490KB since
+                                # this is the full template-composited output
+                                final_buf = save_optimized_png(canvas)
                                 buf = final_buf
                             
                             # Clean filename
@@ -838,13 +882,13 @@ with tab5:
                                 # Draw text
                                 draw_text(draw, text, font, debug_label=state_full_name)
 
-                                # Save the complete image
-                                final_buf = io.BytesIO()
-                                canvas.save(final_buf, format='PNG')
-                                final_buf.seek(0)
+                                # Save the complete image, capped to ~490KB since
+                                # this is the full template-composited output
+                                final_buf = save_optimized_png(canvas)
                                 out_bytes = final_buf.getvalue()
                             else:
-                                # Maps Only: just repackage the source image as PNG
+                                # Maps Only: just repackage the source image as PNG,
+                                # untouched — no size cap needed here
                                 out_buf = io.BytesIO()
                                 state_map_img.save(out_buf, format='PNG')
                                 out_buf.seek(0)
@@ -991,10 +1035,8 @@ with tab1:
             if 'preview_img' in st.session_state:
                 st.image(st.session_state['preview_img'], caption="Preview", use_container_width=True)
 
-                # Download button
-                buf = io.BytesIO()
-                st.session_state['preview_img'].save(buf, format='PNG')
-                buf.seek(0)
+                # Download button — full template composite, so cap to ~490KB
+                buf = save_optimized_png(st.session_state['preview_img'])
 
                 st.download_button(
                     label="⬇️ Download Image",
@@ -1054,10 +1096,8 @@ image3 | Just one line | overlay2.png""",
                     # Generate image
                     img = generate_image(template, overlay, custom_text, font)
 
-                    # Convert to bytes
-                    buf = io.BytesIO()
-                    img.save(buf, format='PNG')
-                    buf.seek(0)
+                    # Convert to bytes — full template composite, so cap to ~490KB
+                    buf = save_optimized_png(img)
                     generated_images[f"{filename}.png"] = buf.getvalue()
 
                     progress_bar.progress((idx + 1) / len(lines))
@@ -1146,4 +1186,5 @@ with st.expander("ℹ️ How to Use"):
     - The county/state overlay stays in its fixed corner box; Alaska is scaled up 6x from that box's own center but capped by "Oversized-Shape Zone Max Width/Height" so it never overflows the canvas
     - The State Map Generator pulls one pre-made image per state from a local `state_images` folder (or an uploaded ZIP), matching files by state name or abbreviation, and processes all 50 states + DC in one batch
     - In the State Map Generator, "Recolor state images" swaps the shape's color for one you choose while preserving its transparent background and edge smoothing — handy if the source images are all one color (e.g. dark blue) and you want a different one
+    - Full "Complete Images" downloads (template + overlay + text) are automatically size-optimized to stay under ~490KB per file; raw "Maps Only" exports are left untouched at full quality
     """)
