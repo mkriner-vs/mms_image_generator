@@ -54,13 +54,13 @@ overlay_zone_max_h = st.sidebar.number_input(
 )
 
 st.sidebar.header("Text Configuration")
-font_size = st.sidebar.slider("Font Size", 10, 300, 240)
+font_size = st.sidebar.slider("Font Size", 100, 400, 265)
 auto_center_text = st.sidebar.checkbox("Auto-center text horizontally", value=False,
                                         help="Recentres the text based on its actual rendered width, so it stays centered no matter how long the text is (e.g. 'Alabama' vs 'California'). The July 2026 template is left-aligned, so this defaults off.")
 text_center_x = st.sidebar.number_input("Text Center X (used when auto-center is on)", value=1590,
                                          help="The horizontal point the text should be centered around.")
 text_x = st.sidebar.number_input("Text X Position (left edge)", value=230, help="Horizontal position of the text")
-text_y = st.sidebar.number_input("Text Y Position (top of first line)", value=630, help="Vertical position of the text")
+text_y = st.sidebar.number_input("Text Y Position (top of first line)", value=930, help="Vertical position of the text")
 text_spacing = st.sidebar.slider("Extra Line Spacing", 0, 50, 0,
                                   help="Extra pixels added on top of the font's natural line height between lines.")
 text_align = st.sidebar.selectbox("Text Alignment", ["left", "center", "right"], index=0,
@@ -585,11 +585,11 @@ with tab4:
                                 
                                 # Determine subdivision type based on state
                                 if selected_state == 'AK':
-                                    subdivision = 'borough'
+                                    subdivision = 'Borough'
                                 elif selected_state == 'LA':
-                                    subdivision = 'parish'
+                                    subdivision = 'Parish'
                                 else:
-                                    subdivision = 'county'
+                                    subdivision = 'County'
                                 
                                 # Two-line text: county/parish/borough name on
                                 # line 1 (drawn in the highlight color), static
