@@ -38,37 +38,54 @@ overlay_files = st.sidebar.file_uploader("Upload Overlay Images", type=['png', '
 
 # Configuration inputs
 st.sidebar.header("Overlay Configuration")
-overlay_x = st.sidebar.number_input("Overlay X Position", value=1301, help="Horizontal position of the overlay; + to move right, - to move left")
-overlay_y = st.sidebar.number_input("Overlay Y Position", value=770, help="Vertical position of the overlay; + to move down, - to move up")
-overlay_max_w = st.sidebar.number_input("Overlay Max Width", value=395, help="Maximum width the overlay can be")
-overlay_max_h = st.sidebar.number_input("Overlay Max Height", value=650, help="Maximum height the overlay can be")
+overlay_x = st.sidebar.number_input("Overlay X Position", value=2072, help="Horizontal position of the overlay box (top-left corner); matches the top-right badge area on the July 2026 template")
+overlay_y = st.sidebar.number_input("Overlay Y Position", value=40, help="Vertical position of the overlay box (top-left corner)")
+overlay_max_w = st.sidebar.number_input("Overlay Max Width", value=880, help="Maximum width the overlay can be")
+overlay_max_h = st.sidebar.number_input("Overlay Max Height", value=720, help="Maximum height the overlay can be")
 overlay_auto_trim = st.sidebar.checkbox("Auto-trim transparent padding on overlay", value=True,
                                          help="Crops each overlay to its visible content before fitting it into the box above. Fixes overlays looking smaller than others when the source image has extra transparent margin (common with state shape PNGs).")
-overlay_bottom_limit = st.sidebar.number_input(
-    "Overlay Bottom Limit Y", value=1420,
-    help="The overlay will never extend below this vertical point. Set it to where any text/graphics baked into your template (e.g. 'Share your perspective today!') begins, so tall overlays never grow into it."
+overlay_zone_max_w = st.sidebar.number_input(
+    "Oversized-Shape Zone Max Width", value=1400,
+    help="Caps how wide an oversized shape (e.g. Alaska, scaled up below) is allowed to grow, so it never overflows the canvas or the text area. The shape stays centered on the normal overlay box."
+)
+overlay_zone_max_h = st.sidebar.number_input(
+    "Oversized-Shape Zone Max Height", value=900,
+    help="Caps how tall an oversized shape (e.g. Alaska, scaled up below) is allowed to grow, so it never overflows the canvas."
 )
 
 st.sidebar.header("Text Configuration")
-font_size = st.sidebar.slider("Font Size", 10, 300, 215)
-auto_center_text = st.sidebar.checkbox("Auto-center text horizontally", value=True,
-                                        help="Recentres the text based on its actual rendered width, so it stays centered no matter how long the text is (e.g. 'Alabama' vs 'California').")
+font_size = st.sidebar.slider("Font Size", 10, 300, 240)
+auto_center_text = st.sidebar.checkbox("Auto-center text horizontally", value=False,
+                                        help="Recentres the text based on its actual rendered width, so it stays centered no matter how long the text is (e.g. 'Alabama' vs 'California'). The July 2026 template is left-aligned, so this defaults off.")
 text_center_x = st.sidebar.number_input("Text Center X (used when auto-center is on)", value=1590,
                                          help="The horizontal point the text should be centered around.")
-text_x = st.sidebar.number_input("Text X Position (used when auto-center is off)", value=391, help="Horizontal position of the text")
-text_y = st.sidebar.number_input("Text Y Position", value=542, help="Vertical position of the text")
-text_spacing = st.sidebar.slider("Line Spacing", 0, 50, 6)
-text_align = st.sidebar.selectbox("Text Alignment", ["left", "center", "right"], index=1)
+text_x = st.sidebar.number_input("Text X Position (left edge)", value=230, help="Horizontal position of the text")
+text_y = st.sidebar.number_input("Text Y Position (top of first line)", value=630, help="Vertical position of the text")
+text_spacing = st.sidebar.slider("Extra Line Spacing", 0, 50, 0,
+                                  help="Extra pixels added on top of the font's natural line height between lines.")
+text_align = st.sidebar.selectbox("Text Alignment", ["left", "center", "right"], index=0,
+                                   help="How each line is aligned within Text Max Width when auto-center is off.")
 auto_shrink_text = st.sidebar.checkbox("Auto-shrink font to fit width", value=True,
                                         help="If a line of text (e.g. a long county name) would render wider than the max width below, the font size is automatically reduced until it fits.")
-text_max_width = st.sidebar.number_input("Text Max Width (px)", value=2800,
-                                          help="Maximum allowed rendered text width before auto-shrink kicks in. Set text_max_width to roughly the width of the template minus 100-150px.")
-text_min_font_size = st.sidebar.number_input("Minimum Font Size (auto-shrink floor)", value=80,
+text_max_width = st.sidebar.number_input("Text Max Width (px)", value=1750,
+                                          help="Maximum allowed rendered text width before auto-shrink kicks in. On the July 2026 template, keep this narrow enough that text doesn't run into the state/county badge in the top-right corner.")
+text_min_font_size = st.sidebar.number_input("Minimum Font Size (auto-shrink floor)", value=100,
                                               help="Font will never shrink below this size, even if the text still doesn't fully fit.")
 
-# Color picker
-text_color = st.sidebar.color_picker("Text Color", "#000000")
-text_color_rgb = tuple(int(text_color.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
+# Colors: the July 2026 template uses two text colors — one for the first line
+# (the dynamic state/county name) and one for the remaining static line(s)
+# (e.g. "voices needed!"), matching the teal/blue two-tone look in the example.
+name_text_color = st.sidebar.color_picker(
+    "First Line Color (state/county name)", "#31BAEC",
+    help="Color for the first line of text — typically the dynamic state or county name."
+)
+name_text_color_rgb = tuple(int(name_text_color.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
+
+static_text_color = st.sidebar.color_picker(
+    "Remaining Lines Color (e.g. 'voices needed!')", "#FFFFFF",
+    help="Color for any additional lines of text after the first."
+)
+static_text_color_rgb = tuple(int(static_text_color.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
 
 
 def trim_transparent(img):
@@ -95,34 +112,26 @@ def fit_into(img, max_w, max_h, trim=None):
 def paste_centered(canvas, overlay_resized, box_x, box_y, box_w, box_h):
     """Alpha-composite overlay_resized centered within the given box."""
     ow, oh = overlay_resized.size
-    paste_x = box_x + (box_w - ow) // 2
-    paste_y = box_y + (box_h - oh) // 2
+    paste_x = int(box_x + (box_w - ow) / 2)
+    paste_y = int(box_y + (box_h - oh) / 2)
     canvas.alpha_composite(overlay_resized, (paste_x, paste_y))
 
 
-def compute_safe_overlay_box(draw, custom_text, font, fallback_y, box_h, bottom_limit=None, padding=20):
+def clamp_box_to_zone(box_x, box_y, box_w, box_h, zone_max_w, zone_max_h):
     """
-    Returns (box_top, box_h) for the overlay, guaranteeing:
-    - the overlay starts below the bottom of custom_text (top limit), so tall
-      shapes never overlap text drawn above them
-    - the overlay ends above bottom_limit, if provided (bottom limit), so tall
-      shapes never grow into text/graphics baked into the template below them
+    Given an overlay box that may have been expanded (e.g. Alaska scaled up
+    6x), caps its width/height to zone_max_w/zone_max_h and re-centers the
+    result on the same center point as the original box, so oversized shapes
+    grow evenly in all directions but never overflow the canvas or the
+    corner badge area on the new (July 2026) template.
     """
-    if custom_text:
-        render_font = get_render_font(draw, custom_text)
-        bbox = draw.multiline_textbbox((0, text_y), custom_text, font=render_font,
-                                        spacing=text_spacing, align=text_align)
-        text_bottom = bbox[3]
-    else:
-        text_bottom = text_y
-
-    box_top = max(fallback_y, text_bottom + padding)
-
-    if bottom_limit is not None:
-        available_h = bottom_limit - box_top - padding
-        box_h = min(box_h, max(available_h, 0))
-
-    return box_top, box_h
+    capped_w = min(box_w, zone_max_w)
+    capped_h = min(box_h, zone_max_h)
+    center_x = box_x + box_w / 2
+    center_y = box_y + box_h / 2
+    new_x = center_x - capped_w / 2
+    new_y = center_y - capped_h / 2
+    return new_x, new_y, capped_w, capped_h
 
 
 def get_font(size):
@@ -174,20 +183,35 @@ def _log_shrink_debug(label, text, base_size, final_size, original_width):
 
 
 def draw_text(draw, custom_text, font, debug_label=None):
-    """Draw custom_text, auto-centering horizontally around text_center_x when
-    enabled, and auto-shrinking the font so long lines never overflow the canvas."""
+    """Draw custom_text line by line, auto-shrinking the font so long lines
+    never overflow the canvas. The first line (typically the dynamic
+    state/county name) is drawn in name_text_color_rgb; any remaining
+    line(s) (e.g. "voices needed!") are drawn in static_text_color_rgb,
+    matching the two-tone look of the July 2026 template. Lines are spaced
+    using the font's own ascent+descent metrics plus text_spacing, and each
+    line is positioned per text_align (or auto-centered around
+    text_center_x when auto_center_text is on)."""
     if not custom_text:
         return
     render_font = get_render_font(draw, custom_text, debug_label=debug_label)
-    if auto_center_text:
-        bbox = draw.multiline_textbbox((0, 0), custom_text, font=render_font,
-                                        spacing=text_spacing, align=text_align)
-        text_w = bbox[2] - bbox[0]
-        draw_x = text_center_x - text_w / 2 - bbox[0]
-    else:
-        draw_x = text_x
-    draw.multiline_text((draw_x, text_y), custom_text, font=render_font,
-                         fill=text_color_rgb, spacing=text_spacing, align=text_align)
+    ascent, descent = render_font.getmetrics()
+    line_height = ascent + descent + text_spacing
+    lines = custom_text.split('\n')
+    y_cursor = text_y
+    for i, line in enumerate(lines):
+        color = name_text_color_rgb if i == 0 else static_text_color_rgb
+        bbox = draw.textbbox((0, 0), line, font=render_font)
+        line_w = bbox[2] - bbox[0]
+        if auto_center_text:
+            draw_x = text_center_x - line_w / 2 - bbox[0]
+        elif text_align == "center":
+            draw_x = text_x + (text_max_width - line_w) / 2 - bbox[0]
+        elif text_align == "right":
+            draw_x = text_x + (text_max_width - line_w) - bbox[0]
+        else:  # left
+            draw_x = text_x - bbox[0]
+        draw.text((draw_x, y_cursor), line, font=render_font, fill=color)
+        y_cursor += line_height
 
 
 def make_color_transparent(img, target_color, threshold=50):
@@ -418,7 +442,7 @@ with tab4:
             "Output Mode:",
             options=["Maps Only", "Complete Images (with template & text)"],
             key="county_output_mode",
-            help="Maps Only: Just county maps. Complete Images: Combines maps with template and adds '[County] residents needed!' text."
+            help="Maps Only: Just county maps. Complete Images: Combines maps with template and adds '[County] [subdivision] / voices needed!' text."
         )
         
         # DPI setting
@@ -512,35 +536,33 @@ with tab4:
                                 else:
                                     subdivision = 'county'
                                 
-                                # Build the text first so we can measure it when
-                                # computing a safe overlay box (must not overlap
-                                # the text above, and must not grow into
-                                # template graphics/text below)
-                                text = f"{county_name} {subdivision} residents needed!"
+                                # Two-line text: county/parish/borough name on
+                                # line 1 (drawn in the highlight color), static
+                                # "voices needed!" on line 2 (drawn in the
+                                # secondary color) — matches the July 2026 template.
+                                text = f"{county_name} {subdivision}\nvoices needed!"
                                 
-                                # Apply special scaling for Alaska (it's geographically huge)
+                                # The overlay sits in a fixed corner box (top-right
+                                # badge area on the new template). Alaska is
+                                # geographically huge and renders tiny within a
+                                # normal-sized box, so it gets scaled up 6x —
+                                # expanded from the box's own center, then capped
+                                # to the oversized-shape zone so it can never
+                                # overflow the canvas or run into the text.
                                 if selected_state == 'AK':
-                                    # Alaska gets 6x the normal max dimensions. Expand the
-                                    # box outward from the same horizontal center as the
-                                    # normal box, rather than growing it to the right only,
-                                    # so Alaska doesn't shift off-center.
                                     box_w, box_h = overlay_max_w * 6, overlay_max_h * 6
-                                    box_x = overlay_x - (box_w - overlay_max_w) // 2
+                                    box_x, box_y_, box_w, box_h = clamp_box_to_zone(
+                                        overlay_x, overlay_y, box_w, box_h,
+                                        overlay_zone_max_w, overlay_zone_max_h
+                                    )
                                 else:
                                     box_w, box_h = overlay_max_w, overlay_max_h
-                                    box_x = overlay_x
-                                
-                                # Constrain the box so tall/thin shapes never
-                                # overlap the text above or below them
-                                box_top, box_h = compute_safe_overlay_box(
-                                    draw, text, font, overlay_y, box_h,
-                                    bottom_limit=overlay_bottom_limit, padding=20
-                                )
+                                    box_x, box_y_ = overlay_x, overlay_y
                                 
                                 county_map_resized = fit_into(county_map_img, box_w, box_h)
                                 
                                 # Paste county map overlay, centered within its box
-                                paste_centered(canvas, county_map_resized, box_x, box_top, box_w, box_h)
+                                paste_centered(canvas, county_map_resized, box_x, box_y_, box_w, box_h)
                                 
                                 # Draw text
                                 draw_text(draw, text, font, debug_label=county_name)
@@ -683,7 +705,7 @@ with tab5:
             "Output Mode:",
             options=["Maps Only", "Complete Images (with template & text)"],
             key="state_output_mode",
-            help="Maps Only: Just the pre-made state images, packaged for download. Complete Images: Combines each state image with your template and adds '[State] residents needed!' text."
+            help="Maps Only: Just the pre-made state images, packaged for download. Complete Images: Combines each state image with your template and adds '[State] / voices needed!' text."
         )
 
         # Recolor option
@@ -770,31 +792,32 @@ with tab5:
                                 canvas = template.copy()
                                 draw = ImageDraw.Draw(canvas)
 
-                                text = f"{state_full_name} residents needed!"
+                                # Two-line text: state name on line 1 (highlight
+                                # color), static "voices needed!" on line 2
+                                # (secondary color) — matches the July 2026 template.
+                                text = f"{state_full_name}\nvoices needed!"
 
-                                # Apply special scaling for Alaska (it's geographically huge)
+                                # The overlay sits in a fixed corner box (top-right
+                                # badge area on the new template). Alaska is
+                                # geographically huge and renders tiny within a
+                                # normal-sized box, so it gets scaled up 6x —
+                                # expanded from the box's own center, then capped
+                                # to the oversized-shape zone so it can never
+                                # overflow the canvas or run into the text.
                                 if abbrev == 'AK':
-                                    # Alaska gets 6x the normal max dimensions. Expand the
-                                    # box outward from the same horizontal center as the
-                                    # normal box, rather than growing it to the right only,
-                                    # so Alaska doesn't shift off-center.
                                     box_w, box_h = overlay_max_w * 6, overlay_max_h * 6
-                                    box_x = overlay_x - (box_w - overlay_max_w) // 2
+                                    box_x, box_y_, box_w, box_h = clamp_box_to_zone(
+                                        overlay_x, overlay_y, box_w, box_h,
+                                        overlay_zone_max_w, overlay_zone_max_h
+                                    )
                                 else:
                                     box_w, box_h = overlay_max_w, overlay_max_h
-                                    box_x = overlay_x
-
-                                # Constrain the box so tall/thin shapes never
-                                # overlap the text above or below them
-                                box_top, box_h = compute_safe_overlay_box(
-                                    draw, text, font, overlay_y, box_h,
-                                    bottom_limit=overlay_bottom_limit, padding=20
-                                )
+                                    box_x, box_y_ = overlay_x, overlay_y
 
                                 state_map_resized = fit_into(state_map_img, box_w, box_h)
 
                                 # Paste state image, centered within its box
-                                paste_centered(canvas, state_map_resized, box_x, box_top, box_w, box_h)
+                                paste_centered(canvas, state_map_resized, box_x, box_y_, box_w, box_h)
 
                                 # Draw text
                                 draw_text(draw, text, font, debug_label=state_full_name)
@@ -912,7 +935,7 @@ with tab5:
                    to composite each one onto your template with the "[State] residents
                    needed!" text.
                 3. Click "Generate All State Maps" to process all 50 states + DC in one batch.
-                4. Download everything as a ZIP, or grab individual states below.
+                4. Download all as ZIP or individually.
 
                 Any state without a matching image file is skipped and listed in a warning
                 so you can spot missing/misnamed files easily.
@@ -1099,12 +1122,12 @@ with st.expander("ℹ️ How to Use"):
     
     ### Tips:
     - Use the configuration sliders to position text and overlays
-    - Text supports multiple lines (use line breaks in the text area)
+    - Text supports multiple lines (use line breaks in the text area); the first line is drawn in the "First Line Color" and any remaining lines are drawn in the "Remaining Lines Color", matching the two-tone look of the July 2026 template
     - Overlay images are automatically resized to fit within max dimensions, with transparent padding auto-trimmed for consistent sizing
-    - Text auto-centers based on its actual width so different-length labels line up the same way
+    - On the July 2026 template, the state/county shape sits in a fixed corner badge box (top-right) and text is left-aligned lower on the card — turn "Auto-center text horizontally" on if you're using an older, center-aligned template instead
     - In batch mode, overlay reference is optional
     - County maps are generated with transparent backgrounds for easy compositing
-    - The county map overlay is automatically kept between the text above it and the "Overlay Bottom Limit Y" setting, so tall/thin state shapes (like Alabama) won't overlap either
+    - The county/state overlay stays in its fixed corner box; Alaska is scaled up 6x from that box's own center but capped by "Oversized-Shape Zone Max Width/Height" so it never overflows the canvas
     - The State Map Generator pulls one pre-made image per state from a local `state_images` folder (or an uploaded ZIP), matching files by state name or abbreviation, and processes all 50 states + DC in one batch
     - In the State Map Generator, "Recolor state images" swaps the shape's color for one you choose while preserving its transparent background and edge smoothing — handy if the source images are all one color (e.g. dark blue) and you want a different one
     """)
