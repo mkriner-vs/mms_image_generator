@@ -38,8 +38,8 @@ overlay_files = st.sidebar.file_uploader("Upload Overlay Images", type=['png', '
 
 # Configuration inputs
 st.sidebar.header("Overlay Configuration")
-overlay_x = st.sidebar.number_input("Overlay X Position", value=2072, help="Horizontal position of the overlay box (top-left corner); matches the top-right badge area on the July 2026 template")
-overlay_y = st.sidebar.number_input("Overlay Y Position", value=40, help="Vertical position of the overlay box (top-left corner)")
+overlay_x = st.sidebar.number_input("Overlay X Position", value=2072, help="Horizontal position of the overlay box (top-left corner); + to move right, - to move left")
+overlay_y = st.sidebar.number_input("Overlay Y Position", value=40, help="Vertical position of the overlay box (top-left corner); + to move down, - to move up")
 overlay_max_w = st.sidebar.number_input("Overlay Max Width", value=880, help="Maximum width the overlay can be")
 overlay_max_h = st.sidebar.number_input("Overlay Max Height", value=720, help="Maximum height the overlay can be")
 overlay_auto_trim = st.sidebar.checkbox("Auto-trim transparent padding on overlay", value=True,
@@ -59,8 +59,8 @@ auto_center_text = st.sidebar.checkbox("Auto-center text horizontally", value=Fa
                                         help="Recentres the text based on its actual rendered width, so it stays centered no matter how long the text is (e.g. 'Alabama' vs 'California'). The July 2026 template is left-aligned, so this defaults off.")
 text_center_x = st.sidebar.number_input("Text Center X (used when auto-center is on)", value=1590,
                                          help="The horizontal point the text should be centered around.")
-text_x = st.sidebar.number_input("Text X Position (left edge)", value=230, help="Horizontal position of the text")
-text_y = st.sidebar.number_input("Text Y Position (top of first line)", value=630, help="Vertical position of the text")
+text_x = st.sidebar.number_input("Text X Position (left edge)", value=230, help="Horizontal position of the text; + to move right, - to move left")
+text_y = st.sidebar.number_input("Text Y Position (top of first line)", value=930, help="Vertical position of the text; + to move down, - to move up")
 text_spacing = st.sidebar.slider("Extra Line Spacing", 0, 50, 0,
                                   help="Extra pixels added on top of the font's natural line height between lines.")
 text_align = st.sidebar.selectbox("Text Alignment", ["left", "center", "right"], index=0,
