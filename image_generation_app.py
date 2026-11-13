@@ -120,7 +120,7 @@ LAYOUT_FIELDS = [
     "overlay_auto_trim", "overlay_zone_max_w", "overlay_zone_max_h",
     "font_size", "auto_center_text", "text_center_x", "text_x", "text_y",
     "text_spacing", "text_align", "auto_shrink_text", "text_max_width",
-    "text_min_font_size", "name_text_color", "static_text_color",
+    "text_min_font_size", "name_text_color", "static_text_color", "font_name",
 ]
 
 
@@ -273,13 +273,21 @@ if use_local_fonts:
     font_options = sorted([f for f in os.listdir(local_fonts_dir) if f.lower().endswith('.ttf')])
 
 font_bytes = None
+chosen_font_name = None
 if font_options:
     font_source_mode = st.sidebar.radio(
         "Font source", ["Choose from library", "Upload custom"],
         horizontal=True, key="font_source_mode"
     )
     if font_source_mode == "Choose from library":
-        chosen_font_name = st.sidebar.selectbox("Font", font_options, key="font_select")
+        # Keyed per template like the layout widgets, so a template's saved
+        # font is selected when the template is.
+        _saved_font = pref("font_name", None)
+        chosen_font_name = st.sidebar.selectbox(
+            "Font", font_options,
+            index=font_options.index(_saved_font) if _saved_font in font_options else 0,
+            key=f"font_name_{_key_suffix}"
+        )
         with open(os.path.join(local_fonts_dir, chosen_font_name), 'rb') as f:
             font_bytes = f.read()
     else:
@@ -370,6 +378,8 @@ if template_bytes:
                 "auto_shrink_text": auto_shrink_text, "text_max_width": text_max_width,
                 "text_min_font_size": text_min_font_size,
                 "name_text_color": name_text_color, "static_text_color": static_text_color,
+                # A custom-uploaded font can't be saved, so keep any saved library font.
+                "font_name": chosen_font_name or pref("font_name", None),
             })
         except requests.RequestException as e:
             st.sidebar.error(f"Couldn't save the layout to GitHub: {e}")

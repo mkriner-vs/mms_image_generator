@@ -195,7 +195,8 @@
     "text_max_width": 1720,
     "text_min_font_size": 100,
     "name_text_color": "#FC8028",
-    "static_text_color": "#000000"
+    "static_text_color": "#000000",
+    "font_name": "OpenSans-ExtraBold.ttf"
   },
   "d1063be0f5834e39663bf6e18f18930012d9f8b58c4cb4b113fbd9b42f1be1ae": {
     "template_name": "statewide_template.png",
@@ -217,7 +218,8 @@
     "text_max_width": 1720,
     "text_min_font_size": 100,
     "name_text_color": "#1C385C",
-    "static_text_color": "#000000"
+    "static_text_color": "#000000",
+    "font_name": "OpenSans-ExtraBold.ttf"
   },
   "db5dc62f38b4b4cbab5d6a25069863255434be50f8a0dbbc22e922a93a66550a": {
     "template_name": "calibrate_template.png",
@@ -239,7 +241,8 @@
     "text_max_width": 1720,
     "text_min_font_size": 100,
     "name_text_color": "#146868",
-    "static_text_color": "#000000"
+    "static_text_color": "#000000",
+    "font_name": "OpenSans-ExtraBold.ttf"
   },
   "0448950db1714942973c250d39d4f82afcec8117440e6fea6b9f965f38810c69": {
     "template_name": "assembly_template.png",
@@ -261,6 +264,7 @@
     "text_max_width": 1720,
     "text_min_font_size": 100,
     "name_text_color": "#6C182C",
-    "static_text_color": "#000000"
+    "static_text_color": "#000000",
+    "font_name": "OpenSans-ExtraBold.ttf"
   }
 }
