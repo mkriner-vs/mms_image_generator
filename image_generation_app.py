@@ -201,8 +201,8 @@ text_center_x = st.sidebar.number_input("Text Center X (used when auto-center is
                                          help="The horizontal point the text should be centered around.")
 text_x = st.sidebar.number_input("Text X Position (left edge)", value=pref("text_x", 230), key=f"text_x_{_key_suffix}", help="Horizontal position of the text")
 text_y = st.sidebar.number_input("Text Y Position (top of first line)", value=pref("text_y", 930), key=f"text_y_{_key_suffix}", help="Vertical position of the text")
-text_spacing = st.sidebar.slider("Extra Line Spacing", 0, 50, pref("text_spacing", 0), key=f"text_spacing_{_key_suffix}",
-                                  help="Extra pixels added on top of the font's natural line height between lines.")
+text_spacing = st.sidebar.slider("Line Spacing Adjustment", -50, 50, pref("text_spacing", 0), key=f"text_spacing_{_key_suffix}",
+                                  help="Pixels added to (positive) or removed from (negative) the font's natural line height between lines.")
 _align_options = ["left", "center", "right"]
 text_align = st.sidebar.selectbox("Text Alignment", _align_options, index=_align_options.index(pref("text_align", "left")),
                                    key=f"text_align_{_key_suffix}",
