@@ -86,5 +86,27 @@
     "text_min_font_size": 100,
     "name_text_color": "#31BAEC",
     "static_text_color": "#FFFFFF"
+  },
+  "efd7603bdc598be877caf78a6463522942baf4def170df660f5d38b506effd84": {
+    "template_name": "aug_2026_25.png",
+    "overlay_x": 2072,
+    "overlay_y": 40,
+    "overlay_max_w": 880,
+    "overlay_max_h": 720,
+    "overlay_auto_trim": true,
+    "overlay_zone_max_w": 1400,
+    "overlay_zone_max_h": 900,
+    "font_size": 265,
+    "auto_center_text": false,
+    "text_center_x": 1590,
+    "text_x": 230,
+    "text_y": 930,
+    "text_spacing": 0,
+    "text_align": "left",
+    "auto_shrink_text": true,
+    "text_max_width": 1750,
+    "text_min_font_size": 100,
+    "name_text_color": "#31BAEC",
+    "static_text_color": "#FFFFFF"
   }
 }
