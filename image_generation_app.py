@@ -166,7 +166,7 @@ def delete_preset(template_hash):
 # dropdown picks an image within it.
 # ----------------------------------------------------------------------
 local_templates_dir = 'templates'
-TEMPLATE_FOLDER_ORDER = ["verasight", "baseline", "statewide", "calibrate"]
+TEMPLATE_FOLDER_ORDER = ["verasight", "baseline", "statewide", "calibrate", "assembly"]
 use_local_templates = os.path.isdir(local_templates_dir)
 template_folders = []
 if use_local_templates:
