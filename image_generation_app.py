@@ -617,7 +617,7 @@ else:
     )
 
 # Tab interface
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["Single Image Generator", "Batch Generator", "Background Remover", "County Map Generator", "State Map Generator"])
+tab4, tab5, tab1, tab2, tab3 = st.tabs(["County Map Generator", "State Map Generator", "Single Image Generator", "Batch Generator", "Background Remover"])
 
 with tab3:
     st.header("🖼️ Background Remover")
