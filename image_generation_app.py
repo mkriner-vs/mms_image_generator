@@ -155,35 +155,64 @@ def delete_preset(template_hash):
     )
 
 
-# File uploaders
-st.sidebar.header("Upload Files")
 # ----------------------------------------------------------------------
 # Template selection: pick from a local 'templates/' folder if one exists
 # next to the app (same pattern as the State Map Generator's state_images
 # folder), otherwise fall back to a plain file uploader. Either path ends
 # up setting `template_bytes` to the raw file bytes.
+#
+# Templates are grouped into one subfolder of 'templates/' per brand; the
+# Brand dropdown (above "Upload Files") picks the folder, and the Template
+# dropdown picks an image within it.
 # ----------------------------------------------------------------------
 local_templates_dir = 'templates'
+TEMPLATE_FOLDER_ORDER = ["verasight", "baseline", "statewide", "calibrate"]
 use_local_templates = os.path.isdir(local_templates_dir)
-template_options = []
+template_folders = []
 if use_local_templates:
-    template_options = sorted([
-        f for f in os.listdir(local_templates_dir)
+    _found_folders = [
+        d for d in os.listdir(local_templates_dir)
+        if os.path.isdir(os.path.join(local_templates_dir, d)) and not d.startswith('.')
+    ]
+    # Known folders first in their set order, then any others alphabetically.
+    template_folders = [d for d in TEMPLATE_FOLDER_ORDER if d in _found_folders] + \
+                       sorted(d for d in _found_folders if d not in TEMPLATE_FOLDER_ORDER)
+
+
+def list_template_images(folder):
+    folder_path = os.path.join(local_templates_dir, folder)
+    return sorted(
+        f for f in os.listdir(folder_path)
         if f.lower().endswith(('.png', '.jpg', '.jpeg'))
-    ])
+    )
+
+
+chosen_brand = None
+if template_folders:
+    chosen_brand = st.sidebar.selectbox("Brand", template_folders, key="brand_select",
+                                        format_func=str.title)
+
+# File uploaders
+st.sidebar.header("Upload Files")
 
 template_bytes = None
 template_display_name = None
-if template_options:
+if template_folders:
     template_source_mode = st.sidebar.radio(
         "Template source", ["Choose from library", "Upload custom"],
         horizontal=True, key="template_source_mode"
     )
     if template_source_mode == "Choose from library":
-        chosen_template_name = st.sidebar.selectbox("Template", template_options, key="template_select")
-        with open(os.path.join(local_templates_dir, chosen_template_name), 'rb') as f:
-            template_bytes = f.read()
-        template_display_name = chosen_template_name
+        template_options = list_template_images(chosen_brand)
+        if template_options:
+            chosen_template_name = st.sidebar.selectbox("Template", template_options,
+                                                        key=f"template_select_{chosen_brand}")
+            with open(os.path.join(local_templates_dir, chosen_brand, chosen_template_name), 'rb') as f:
+                template_bytes = f.read()
+            template_display_name = chosen_template_name
+        else:
+            st.sidebar.caption(f"No {chosen_brand.title()} templates yet — add images to "
+                               f"templates/{chosen_brand}/ or upload one instead.")
     else:
         _uploaded_template = st.sidebar.file_uploader("Upload Template Image", type=['png', 'jpg', 'jpeg'])
         if _uploaded_template:
@@ -191,7 +220,7 @@ if template_options:
             template_display_name = _uploaded_template.name
 else:
     if use_local_templates:
-        st.sidebar.caption("No images found in 'templates' folder — upload one instead.")
+        st.sidebar.caption("No template folders found in 'templates' — upload one instead.")
     _uploaded_template = st.sidebar.file_uploader("Upload Template Image", type=['png', 'jpg', 'jpeg'])
     if _uploaded_template:
         template_bytes = _uploaded_template.getvalue()
