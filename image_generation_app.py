@@ -16,6 +16,8 @@ matplotlib.use('Agg')  # Use non-interactive backend
 import os
 import hashlib
 import json
+import base64
+import requests
 
 # Page config
 st.set_page_config(page_title="Custom Image Generator", layout="wide")
@@ -27,11 +29,91 @@ logo = Image.open("static/logo_white.png").resize((166,252))
 st.sidebar.image(logo)
 
 # --- Per-template layout presets --------------------------------------------
-# Saved to a local JSON file, keyed by a hash of the template's bytes, so the
+# Saved to a JSON file, keyed by a hash of the template's bytes, so the
 # overlay/text position & size settings tuned for a given template are
 # remembered and auto-loaded the next time that same template is selected or
 # uploaded again.
+#
+# When a [github] section is present in st.secrets (as on Streamlit Community
+# Cloud), the file is read from and committed to the GitHub repo through the
+# contents API, so layouts survive redeploys and restarts. Otherwise (e.g.
+# running locally) it's just a file next to the app.
 PRESETS_FILE = 'template_layouts.json'
+GITHUB_API = 'https://api.github.com'
+
+
+def _github_config():
+    """Return the [github] secrets (token, repo, optional branch), or None
+    if they aren't configured."""
+    try:
+        cfg = st.secrets["github"]
+        if cfg.get("token") and cfg.get("repo"):
+            return cfg
+    except Exception:  # no secrets file / no [github] section
+        pass
+    return None
+
+
+def _github_contents_url(cfg):
+    return f"{GITHUB_API}/repos/{cfg['repo']}/contents/{PRESETS_FILE}"
+
+
+def _github_headers(cfg):
+    return {
+        "Authorization": f"Bearer {cfg['token']}",
+        "Accept": "application/vnd.github+json",
+    }
+
+
+def _fetch_github_presets(cfg):
+    """Fetch the presets file from GitHub. Returns (presets, sha); sha is
+    None if the file doesn't exist in the repo yet."""
+    resp = requests.get(_github_contents_url(cfg), headers=_github_headers(cfg),
+                        params={"ref": cfg.get("branch", "main")}, timeout=15)
+    if resp.status_code == 404:
+        return {}, None
+    resp.raise_for_status()
+    body = resp.json()
+    return json.loads(base64.b64decode(body["content"]).decode("utf-8")), body["sha"]
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _cached_github_presets(repo, branch):
+    # repo/branch are only the cache key; the config is re-read inside.
+    return _fetch_github_presets(_github_config())[0]
+
+
+def _write_github_presets(cfg, update, message):
+    """Apply `update` (a function that edits the presets dict in place) to the
+    latest copy on GitHub and commit it. Retries if someone else saved in
+    between (GitHub rejects the write when the sha is stale)."""
+    for _attempt in range(3):
+        presets, sha = _fetch_github_presets(cfg)
+        update(presets)
+        payload = {
+            "message": message,
+            "content": base64.b64encode(json.dumps(presets, indent=2).encode("utf-8")).decode("ascii"),
+            "branch": cfg.get("branch", "main"),
+        }
+        if sha:
+            payload["sha"] = sha
+        resp = requests.put(_github_contents_url(cfg), headers=_github_headers(cfg), json=payload, timeout=15)
+        if resp.status_code in (409, 422) and _attempt < 2:
+            continue
+        resp.raise_for_status()
+        _cached_github_presets.clear()
+        return
+
+
+def _modify_presets(update, message):
+    cfg = _github_config()
+    if cfg:
+        _write_github_presets(cfg, update, message)
+        return
+    presets = load_presets()
+    update(presets)
+    with open(PRESETS_FILE, 'w') as f:
+        json.dump(presets, f, indent=2)
 
 LAYOUT_FIELDS = [
     "overlay_x", "overlay_y", "overlay_max_w", "overlay_max_h",
@@ -43,6 +125,13 @@ LAYOUT_FIELDS = [
 
 
 def load_presets():
+    cfg = _github_config()
+    if cfg:
+        try:
+            return _cached_github_presets(cfg["repo"], cfg.get("branch", "main"))
+        except (requests.RequestException, ValueError, KeyError):
+            st.sidebar.warning("⚠️ Couldn't load saved layouts from GitHub — using defaults for now.")
+            return {}
     if os.path.exists(PRESETS_FILE):
         try:
             with open(PRESETS_FILE, 'r') as f:
@@ -53,17 +142,17 @@ def load_presets():
 
 
 def save_preset(template_hash, template_name, values):
-    presets = load_presets()
-    presets[template_hash] = {"template_name": template_name, **values}
-    with open(PRESETS_FILE, 'w') as f:
-        json.dump(presets, f, indent=2)
+    _modify_presets(
+        lambda presets: presets.__setitem__(template_hash, {"template_name": template_name, **values}),
+        f"Save layout for {template_name}",
+    )
 
 
 def delete_preset(template_hash):
-    presets = load_presets()
-    presets.pop(template_hash, None)
-    with open(PRESETS_FILE, 'w') as f:
-        json.dump(presets, f, indent=2)
+    _modify_presets(
+        lambda presets: presets.pop(template_hash, None),
+        "Delete saved template layout",
+    )
 
 
 # File uploaders
@@ -127,10 +216,14 @@ if template_bytes:
     if saved_layout:
         st.sidebar.success(f"✅ Saved layout loaded for '{saved_layout.get('template_name', template_display_name)}'")
         if st.sidebar.button("🗑️ Forget this layout", key="forget_layout_btn"):
-            delete_preset(template_hash)
-            for _field in LAYOUT_FIELDS:
-                st.session_state.pop(f"{_field}_{template_hash}", None)
-            st.rerun()
+            try:
+                delete_preset(template_hash)
+            except requests.RequestException as e:
+                st.sidebar.error(f"Couldn't delete the layout on GitHub: {e}")
+            else:
+                for _field in LAYOUT_FIELDS:
+                    st.session_state.pop(f"{_field}_{template_hash}", None)
+                st.rerun()
     else:
         st.sidebar.info("ℹ️ No saved layout for this template yet — tune the settings below, then save them.")
 
@@ -236,19 +329,23 @@ static_text_color_rgb = tuple(int(static_text_color.lstrip('#')[i:i+2], 16) for 
 
 if template_bytes:
     if st.sidebar.button("💾 Save current values as this template's layout", key="save_layout_btn"):
-        save_preset(template_hash, template_display_name, {
-            "overlay_x": overlay_x, "overlay_y": overlay_y,
-            "overlay_max_w": overlay_max_w, "overlay_max_h": overlay_max_h,
-            "overlay_auto_trim": overlay_auto_trim,
-            "overlay_zone_max_w": overlay_zone_max_w, "overlay_zone_max_h": overlay_zone_max_h,
-            "font_size": font_size, "auto_center_text": auto_center_text,
-            "text_center_x": text_center_x, "text_x": text_x, "text_y": text_y,
-            "text_spacing": text_spacing, "text_align": text_align,
-            "auto_shrink_text": auto_shrink_text, "text_max_width": text_max_width,
-            "text_min_font_size": text_min_font_size,
-            "name_text_color": name_text_color, "static_text_color": static_text_color,
-        })
-        st.sidebar.success(f"Layout saved for '{template_display_name}'!")
+        try:
+            save_preset(template_hash, template_display_name, {
+                "overlay_x": overlay_x, "overlay_y": overlay_y,
+                "overlay_max_w": overlay_max_w, "overlay_max_h": overlay_max_h,
+                "overlay_auto_trim": overlay_auto_trim,
+                "overlay_zone_max_w": overlay_zone_max_w, "overlay_zone_max_h": overlay_zone_max_h,
+                "font_size": font_size, "auto_center_text": auto_center_text,
+                "text_center_x": text_center_x, "text_x": text_x, "text_y": text_y,
+                "text_spacing": text_spacing, "text_align": text_align,
+                "auto_shrink_text": auto_shrink_text, "text_max_width": text_max_width,
+                "text_min_font_size": text_min_font_size,
+                "name_text_color": name_text_color, "static_text_color": static_text_color,
+            })
+        except requests.RequestException as e:
+            st.sidebar.error(f"Couldn't save the layout to GitHub: {e}")
+        else:
+            st.sidebar.success(f"Layout saved for '{template_display_name}'!")
 
 
 def trim_transparent(img):
